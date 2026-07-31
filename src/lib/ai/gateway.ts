@@ -130,6 +130,186 @@ async function chatOpenAI(
   return { text, provider: "openai", model: opts.model, raw: response };
 }
 
+// ---------------------------------------------------------------------------
+// Agente con tool-calling (usado por el chatbot, Fase 4). Mismo principio de
+// gateway unificado: una sola función corre el loop de "modelo pide
+// herramienta -> ejecutamos -> se la regresamos -> modelo sigue" sin
+// importar el proveedor.
+// ---------------------------------------------------------------------------
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>; // JSON Schema de los parámetros
+}
+
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export type ToolExecutor = (call: ToolCall) => Promise<unknown>;
+
+export interface GatewayAgentOptions {
+  provider: Provider;
+  apiKey: string;
+  model?: string;
+  system?: string;
+  messages: ChatMessage[];
+  tools: ToolDefinition[];
+  executeTool: ToolExecutor;
+  maxTokens?: number;
+  /** Límite de vueltas modelo->herramienta->modelo, para evitar loops infinitos. */
+  maxSteps?: number;
+}
+
+export interface AgentToolCallTrace {
+  name: string;
+  input: unknown;
+  result: unknown;
+}
+
+export interface GatewayAgentResult {
+  text: string;
+  provider: Provider;
+  model: string;
+  toolCalls: AgentToolCallTrace[];
+}
+
+export async function runAgent(
+  opts: GatewayAgentOptions,
+): Promise<GatewayAgentResult> {
+  const model = opts.model ?? DEFAULT_MODELS[opts.provider];
+  const maxSteps = opts.maxSteps ?? 6;
+
+  if (opts.provider === "anthropic") {
+    return runAgentAnthropic({ ...opts, model, maxSteps });
+  }
+  return runAgentOpenAI({ ...opts, model, maxSteps });
+}
+
+async function runAgentAnthropic(
+  opts: GatewayAgentOptions & { model: string; maxSteps: number },
+): Promise<GatewayAgentResult> {
+  const client = new Anthropic({ apiKey: opts.apiKey });
+  const tools: Anthropic.Tool[] = opts.tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+  }));
+
+  const messages: Anthropic.MessageParam[] = opts.messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+  const toolCalls: AgentToolCallTrace[] = [];
+
+  for (let step = 0; step < opts.maxSteps; step++) {
+    const response = await client.messages.create({
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 4096,
+      system: opts.system,
+      messages,
+      tools,
+    });
+
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason !== "tool_use") {
+      const text = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+      return { text, provider: "anthropic", model: opts.model, toolCalls };
+    }
+
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of toolUseBlocks) {
+      const input = block.input as Record<string, unknown>;
+      const result = await opts.executeTool({ name: block.name, input });
+      toolCalls.push({ name: block.name, input, result });
+      toolResults.push({
+        type: "tool_result",
+        tool_use_id: block.id,
+        content: JSON.stringify(result),
+      });
+    }
+
+    messages.push({ role: "user", content: toolResults });
+  }
+
+  throw new Error(
+    `El agente alcanzó el límite de ${opts.maxSteps} pasos sin dar una respuesta final.`,
+  );
+}
+
+async function runAgentOpenAI(
+  opts: GatewayAgentOptions & { model: string; maxSteps: number },
+): Promise<GatewayAgentResult> {
+  const client = new OpenAI({ apiKey: opts.apiKey });
+  const tools: OpenAI.Chat.ChatCompletionTool[] = opts.tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.inputSchema,
+    },
+  }));
+
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    ...(opts.system
+      ? [{ role: "system" as const, content: opts.system }]
+      : []),
+    ...opts.messages.map((m) => ({ role: m.role, content: m.content })),
+  ];
+  const toolCalls: AgentToolCallTrace[] = [];
+
+  for (let step = 0; step < opts.maxSteps; step++) {
+    const response = await client.chat.completions.create({
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 4096,
+      messages,
+      tools,
+    });
+
+    const choice = response.choices[0];
+    const message = choice.message;
+    messages.push(message);
+
+    if (!message.tool_calls || message.tool_calls.length === 0) {
+      return {
+        text: message.content ?? "",
+        provider: "openai",
+        model: opts.model,
+        toolCalls,
+      };
+    }
+
+    for (const call of message.tool_calls) {
+      if (call.type !== "function") continue;
+      const input = JSON.parse(call.function.arguments || "{}");
+      const result = await opts.executeTool({
+        name: call.function.name,
+        input,
+      });
+      toolCalls.push({ name: call.function.name, input, result });
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+    }
+  }
+
+  throw new Error(
+    `El agente alcanzó el límite de ${opts.maxSteps} pasos sin dar una respuesta final.`,
+  );
+}
+
 // Prueba rápida de que una API key es válida, para usarla en la pantalla de
 // Configuración antes de guardar la credencial.
 export async function verifyApiKey(

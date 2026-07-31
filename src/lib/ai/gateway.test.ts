@@ -23,7 +23,7 @@ vi.mock("openai", () => {
   };
 });
 
-import { chat } from "./gateway";
+import { chat, runAgent } from "./gateway";
 
 beforeEach(() => {
   anthropicCreateMock.mockReset();
@@ -113,5 +113,126 @@ describe("gateway: chat", () => {
     const callArgs = anthropicCreateMock.mock.calls[0][0];
     expect(typeof callArgs.model).toBe("string");
     expect(callArgs.model.length).toBeGreaterThan(0);
+  });
+});
+
+const FAKE_TOOL = {
+  name: "get_transactions",
+  description: "test tool",
+  inputSchema: { type: "object", properties: {} },
+};
+
+describe("gateway: runAgent (tool-calling)", () => {
+  it("Anthropic: ejecuta la herramienta pedida y regresa la respuesta final", async () => {
+    anthropicCreateMock
+      .mockResolvedValueOnce({
+        stop_reason: "tool_use",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_1",
+            name: "get_transactions",
+            input: { limit: 3 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Gastaste $500 en total." }],
+      });
+
+    const executeTool = vi.fn().mockResolvedValue([{ amount: 500 }]);
+
+    const result = await runAgent({
+      provider: "anthropic",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "¿cuánto gasté?" }],
+      tools: [FAKE_TOOL],
+      executeTool,
+    });
+
+    expect(executeTool).toHaveBeenCalledWith({
+      name: "get_transactions",
+      input: { limit: 3 },
+    });
+    expect(result.text).toBe("Gastaste $500 en total.");
+    expect(result.toolCalls).toHaveLength(1);
+    expect(anthropicCreateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("OpenAI: ejecuta la herramienta pedida y regresa la respuesta final", async () => {
+    openaiCreateMock
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "get_transactions",
+                    arguments: JSON.stringify({ limit: 3 }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "Gastaste $500 en total.",
+            },
+          },
+        ],
+      });
+
+    const executeTool = vi.fn().mockResolvedValue([{ amount: 500 }]);
+
+    const result = await runAgent({
+      provider: "openai",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "¿cuánto gasté?" }],
+      tools: [FAKE_TOOL],
+      executeTool,
+    });
+
+    expect(executeTool).toHaveBeenCalledWith({
+      name: "get_transactions",
+      input: { limit: 3 },
+    });
+    expect(result.text).toBe("Gastaste $500 en total.");
+    expect(openaiCreateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("lanza un error si se alcanza el límite de pasos sin respuesta final", async () => {
+    anthropicCreateMock.mockResolvedValue({
+      stop_reason: "tool_use",
+      content: [
+        {
+          type: "tool_use",
+          id: "call_x",
+          name: "get_transactions",
+          input: {},
+        },
+      ],
+    });
+
+    await expect(
+      runAgent({
+        provider: "anthropic",
+        apiKey: "fake-key",
+        messages: [{ role: "user", content: "hola" }],
+        tools: [FAKE_TOOL],
+        executeTool: vi.fn().mockResolvedValue({}),
+        maxSteps: 2,
+      }),
+    ).rejects.toThrow(/límite de 2 pasos/);
   });
 });

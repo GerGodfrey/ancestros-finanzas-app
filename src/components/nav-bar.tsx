@@ -15,6 +15,12 @@ export function NavBar({ userEmail }: { userEmail?: string | null }) {
           >
             Subir PDF
           </Link>
+          <Link
+            href="/dashboard/chat"
+            className="transition hover:text-zinc-100"
+          >
+            Chat
+          </Link>
           <Link href="/settings" className="transition hover:text-zinc-100">
             Configuración
           </Link>
