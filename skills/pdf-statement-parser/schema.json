@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StatementExtraction",
+  "type": "object",
+  "required": ["account", "statement", "transactions"],
+  "properties": {
+    "account": {
+      "type": "object",
+      "required": ["issuer", "product_name"],
+      "properties": {
+        "issuer": { "type": "string", "description": "Ej. 'Banamex', 'American Express', 'Palacio de Hierro'" },
+        "product_name": { "type": "string", "description": "Ej. 'Explora', 'Joy', 'BSmart', 'Platinum'" },
+        "last4": { "type": ["string", "null"] },
+        "credit_limit": { "type": ["number", "null"] },
+        "rate_ordinaria": { "type": ["number", "null"], "description": "Tasa de interés anual ordinaria, ej. 55.53" },
+        "rate_moratoria": { "type": ["number", "null"], "description": "Tasa de interés anual moratoria, si aparece en el PDF" }
+      }
+    },
+    "statement": {
+      "type": "object",
+      "required": ["period_start", "period_end", "cut_date", "due_date"],
+      "properties": {
+        "period_start": { "type": "string", "format": "date" },
+        "period_end": { "type": "string", "format": "date" },
+        "cut_date": { "type": "string", "format": "date" },
+        "due_date": { "type": "string", "format": "date" },
+        "previous_balance": { "type": "number" },
+        "new_charges": { "type": "number" },
+        "payment_no_interest": { "type": "number", "description": "\"Pago para no generar intereses\" / \"Saldo Actual\"" },
+        "payment_minimum": { "type": "number" },
+        "interest_charged": { "type": "number", "default": 0 },
+        "iva_interest": { "type": "number", "default": 0 },
+        "available_credit": { "type": ["number", "null"] }
+      }
+    },
+    "transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tx_date", "description", "amount", "type"],
+        "properties": {
+          "tx_date": { "type": "string", "format": "date" },
+          "description": { "type": "string" },
+          "amount": { "type": "number", "description": "Positivo = cargo, negativo = pago/abono" },
+          "type": {
+            "type": "string",
+            "enum": ["regular", "msi", "interest", "fee", "payment"]
+          },
+          "msi_ref": {
+            "type": ["string", "null"],
+            "description": "Concepto del plan MSI al que pertenece esta línea, si type='msi'"
+          }
+        }
+      }
+    },
+    "msi_plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["concept", "original_amount", "monthly_payment", "installment_number", "total_installments"],
+        "properties": {
+          "concept": { "type": "string" },
+          "original_amount": { "type": "number" },
+          "monthly_payment": { "type": "number" },
+          "installment_number": { "type": "integer", "description": "Cuál mensualidad es esta (X de X/Y)" },
+          "total_installments": { "type": "integer" },
+          "balance_remaining": { "type": "number" }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Cualquier cosa que no se pudo extraer con confianza, o inconsistencia detectada (ver checklist de validación en SKILL.md)"
+    }
+  }
+}

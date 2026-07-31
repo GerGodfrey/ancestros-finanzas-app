@@ -9,6 +9,12 @@ export function NavBar({ userEmail }: { userEmail?: string | null }) {
           <Link href="/dashboard" className="transition hover:text-zinc-100">
             Dashboard
           </Link>
+          <Link
+            href="/dashboard/upload"
+            className="transition hover:text-zinc-100"
+          >
+            Subir PDF
+          </Link>
           <Link href="/settings" className="transition hover:text-zinc-100">
             Configuración
           </Link>
