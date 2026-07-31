@@ -1,0 +1,386 @@
+"use client";
+
+import { useState } from "react";
+import type { MonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
+import { BudgetQuickAdd } from "./budget-quick-add";
+
+const TABS = [
+  { id: "resumen", label: "📊 Resumen del Mes" },
+  { id: "desglose", label: "🧩 Desglose" },
+  { id: "movimientos", label: "🧾 Movimientos Relevantes" },
+  { id: "proximo", label: "📅 Próximo Mes" },
+  { id: "validacion", label: "🧮 Validación" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
+const money = (n: number | null | undefined) =>
+  (n ?? 0).toLocaleString("es-MX", {
+    style: "currency",
+    currency: "MXN",
+  });
+
+const pct = (n: number | null | undefined) =>
+  n === null || n === undefined ? "—" : `${(n * 100).toFixed(1)}%`;
+
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-100">
+        <span className="h-4 w-0.5 rounded bg-violet-500" />
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "good" | "bad" | "warn";
+}) {
+  const toneColor = {
+    default: "text-zinc-100",
+    good: "text-emerald-400",
+    bad: "text-red-400",
+    warn: "text-amber-400",
+  }[tone];
+  const borderColor = {
+    default: "border-l-violet-500",
+    good: "border-l-emerald-500",
+    bad: "border-l-red-500",
+    warn: "border-l-amber-500",
+  }[tone];
+
+  return (
+    <div
+      className={`rounded-lg border border-zinc-800 border-l-4 ${borderColor} bg-zinc-900 p-4`}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
+      <div className={`mt-1.5 text-xl font-bold ${toneColor}`}>{value}</div>
+    </div>
+  );
+}
+
+export function DashboardTabs({ data }: { data: MonthlyDashboardData }) {
+  const [tab, setTab] = useState<TabId>("resumen");
+
+  if (!data.hasData) {
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-8 text-center">
+        <p className="text-sm text-zinc-400">
+          Todavía no hay estados de cuenta procesados. Sube un PDF para
+          empezar a ver tu dashboard.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${
+              tab === t.id
+                ? "border-violet-500 bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-100"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "resumen" && <ResumenTab data={data} />}
+      {tab === "desglose" && <DesgloseTab data={data} />}
+      {tab === "movimientos" && <MovimientosTab data={data} />}
+      {tab === "proximo" && <ProximoMesTab data={data} />}
+      {tab === "validacion" && <ValidacionTab data={data} />}
+    </div>
+  );
+}
+
+function ResumenTab({ data }: { data: MonthlyDashboardData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <Kpi label="Ingreso Total" value={money(data.ingresoTotal)} tone="good" />
+        <Kpi label="Egreso Total" value={money(data.egresoTotal)} tone="bad" />
+        <Kpi
+          label="Balance del Mes"
+          value={money(data.balance)}
+          tone={data.balance >= 0 ? "good" : "bad"}
+        />
+        <Kpi label="Gasto Total Tarjetas" value={money(data.gastoTarjetas)} />
+        <Kpi label="MSI Mensual" value={money(data.msiMensualTotal)} tone="warn" />
+        <Kpi
+          label="Disponible Gasto Libre"
+          value={money(data.saldoDisponibleGastoLibre)}
+          tone={data.saldoDisponibleGastoLibre >= 0 ? "good" : "bad"}
+        />
+      </div>
+
+      <Panel title="Estado de Tarjetas">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="pb-2 pr-4">Tarjeta</th>
+                <th className="pb-2 pr-4">Gasto del Mes</th>
+                <th className="pb-2 pr-4">Límite</th>
+                <th className="pb-2 pr-4">Disponible</th>
+                <th className="pb-2 pr-4">Utilización</th>
+                <th className="pb-2 pr-4">Deuda MSI</th>
+                <th className="pb-2 pr-4">Fecha Pago</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.cards.map((c) => (
+                <tr key={c.accountId} className="border-b border-zinc-800/60">
+                  <td className="py-2 pr-4 font-medium text-zinc-100">
+                    {c.issuer} {c.productName}
+                  </td>
+                  <td className="py-2 pr-4">{money(c.gasto)}</td>
+                  <td className="py-2 pr-4">{money(c.limite)}</td>
+                  <td className="py-2 pr-4">{money(c.disponible)}</td>
+                  <td className="py-2 pr-4">
+                    <span
+                      className={
+                        (c.utilizacion ?? 0) > 0.6
+                          ? "text-red-400"
+                          : (c.utilizacion ?? 0) > 0.4
+                            ? "text-amber-400"
+                            : "text-emerald-400"
+                      }
+                    >
+                      {pct(c.utilizacion)}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4">{money(c.deudaMsi)}</td>
+                  <td className="py-2 pr-4 text-zinc-400">
+                    {c.fechaPago ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Panel title="Desglose de Ingresos">
+        {data.incomes.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Todavía no capturas ingresos para este mes.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {data.incomes.map((i, idx) => (
+              <li key={idx} className="flex justify-between border-b border-zinc-800/60 pb-2">
+                <span className="text-zinc-300">{i.concept}</span>
+                <span className="font-medium text-zinc-100">{money(i.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="Desglose de Egresos Fijos (débito)">
+        {data.fixedCosts.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Todavía no capturas costos fijos para este mes.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {data.fixedCosts.map((f, idx) => (
+              <li key={idx} className="flex justify-between border-b border-zinc-800/60 pb-2">
+                <span className="text-zinc-300">{f.concept}</span>
+                <span className="font-medium text-zinc-100">{money(f.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="Gasto por Tarjeta">
+        <ul className="flex flex-col gap-2 text-sm">
+          {data.cards.map((c) => (
+            <li
+              key={c.accountId}
+              className="flex justify-between border-b border-zinc-800/60 pb-2"
+            >
+              <span className="text-zinc-300">
+                {c.issuer} {c.productName}
+              </span>
+              <span className="font-medium text-zinc-100">{money(c.gasto)}</span>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Agregar ingreso o costo fijo">
+        {data.monthLabel && <BudgetQuickAdd month={data.monthLabel} />}
+      </Panel>
+    </div>
+  );
+}
+
+function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
+  return (
+    <Panel title="Movimientos Relevantes (top 10 por monto)">
+      {data.relevantTransactions.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No hay movimientos para este periodo.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="pb-2 pr-4">Fecha</th>
+                <th className="pb-2 pr-4">Tarjeta</th>
+                <th className="pb-2 pr-4">Descripción</th>
+                <th className="pb-2 pr-4">Tipo</th>
+                <th className="pb-2 pr-4">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.relevantTransactions.map((t) => (
+                <tr key={t.id} className="border-b border-zinc-800/60">
+                  <td className="py-2 pr-4 text-zinc-400">{t.date}</td>
+                  <td className="py-2 pr-4">{t.accountLabel}</td>
+                  <td className="py-2 pr-4 text-zinc-200">{t.description}</td>
+                  <td className="py-2 pr-4">
+                    <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                      {t.type}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4 font-medium text-zinc-100">
+                    {money(t.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        className="rounded-lg border p-5"
+        style={{
+          borderColor: "#7C3AED",
+          background: "linear-gradient(180deg,#1C1530,#161B26)",
+        }}
+      >
+        <h2 className="mb-3 text-sm font-semibold text-zinc-100">
+          📅 Lo que ya está comprometido el próximo mes
+        </h2>
+        <div className="text-3xl font-extrabold text-violet-300">
+          {money(data.msiMensualTotal + data.egresoDebito)}
+        </div>
+        <p className="mt-1 text-xs text-zinc-400">
+          = {money(data.msiMensualTotal)} en mensualidades MSI +{" "}
+          {money(data.egresoDebito)} en costos fijos
+        </p>
+      </div>
+
+      <Panel title="Mensualidades MSI activas">
+        {data.msiPlans.length === 0 ? (
+          <p className="text-sm text-zinc-500">No tienes planes MSI activos.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="pb-2 pr-4">Concepto</th>
+                <th className="pb-2 pr-4">Tarjeta</th>
+                <th className="pb-2 pr-4">Mensualidad</th>
+                <th className="pb-2 pr-4">Avance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.msiPlans.map((p, idx) => (
+                <tr key={idx} className="border-b border-zinc-800/60">
+                  <td className="py-2 pr-4 text-zinc-200">{p.concept}</td>
+                  <td className="py-2 pr-4 text-zinc-400">{p.accountLabel}</td>
+                  <td className="py-2 pr-4 font-medium text-zinc-100">
+                    {money(p.monthlyPayment)}
+                  </td>
+                  <td className="py-2 pr-4 text-zinc-400">
+                    {p.installmentsPaid}/{p.totalInstallments ?? "?"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      <Panel title="Cuánto puedes gastar el próximo mes (máximo, según ingreso)">
+        <div className="text-2xl font-bold text-emerald-400">
+          {money(data.saldoDisponibleGastoLibre)}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Ingreso ({money(data.ingresoTotal)}) − costos fijos (
+          {money(data.egresoDebito)}) − mensualidades MSI (
+          {money(data.msiMensualTotal)})
+        </p>
+      </Panel>
+    </div>
+  );
+}
+
+function ValidacionTab({ data }: { data: MonthlyDashboardData }) {
+  return (
+    <Panel title="Avisos de validación del parseo">
+      {data.validationIssues.length === 0 ? (
+        <p className="text-sm text-emerald-400">
+          ✅ No se detectaron inconsistencias en los estados de cuenta de este
+          mes.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {data.validationIssues.map((issue, idx) => (
+            <li
+              key={idx}
+              className={`rounded-md border p-3 text-xs ${
+                issue.severity === "error"
+                  ? "border-red-500/30 bg-red-500/10 text-red-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              }`}
+            >
+              <span className="font-semibold">{issue.accountLabel}:</span>{" "}
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
