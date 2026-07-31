@@ -25,9 +25,16 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Fail closed: si Supabase no responde (red caída, credenciales mal
+  // configuradas), tratamos la sesión como no autenticada en vez de tronar
+  // el proxy para todo el sitio.
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    user = null;
+  }
 
   const protectedPrefixes = ["/dashboard", "/settings"];
   const isProtected = protectedPrefixes.some((p) =>
