@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Finanzas
 
-## Getting Started
+Webapp de finanzas personales: sube los PDFs de tus estados de cuenta, se
+leen automáticamente con IA (Anthropic u OpenAI, a tu elección), y tienes un
+dashboard mensual + un chatbot que puede consultar todo tu historial real.
 
-First, run the development server:
+Ver el plan de arquitectura completo en
+`/Users/lggc/.claude/plans/compiled-petting-riddle.md`.
+
+## Stack
+
+- Next.js 16 (App Router) + TypeScript + Tailwind
+- Supabase: Postgres (RLS por usuario), Auth (Google OAuth), Storage
+- Gateway multi-proveedor propio (`src/lib/ai/gateway.ts`) — Anthropic u
+  OpenAI, con la API key que cada usuario guarda cifrada en Configuración
+- El Skill de parseo de PDFs vive en `skills/pdf-statement-parser/`
+
+## 1. Configuración inicial
+
+```bash
+npm install
+cp .env.local.example .env.local
+```
+
+Llena `.env.local`:
+
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — de tu
+  proyecto en supabase.com (Settings → API).
+- `ENCRYPTION_KEY` — genera una con `openssl rand -base64 32`. Se usa para
+  cifrar las API keys que los usuarios guardan en Configuración.
+- `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — opcionales, solo para tus propias
+  pruebas locales (cada usuario final pone la suya en la app).
+
+## 2. Base de datos
+
+Las migraciones están en `supabase/migrations/` (versionadas, se aplican en
+orden). Dos formas de aplicarlas:
+
+**Opción A — Supabase CLI:**
+```bash
+npx supabase login
+npx supabase link --project-ref <tu-project-ref>
+npx supabase db push
+```
+
+**Opción B — SQL Editor del dashboard de Supabase:** copia y pega el
+contenido de cada archivo en `supabase/migrations/`, en orden, y ejecútalo.
+
+También hay que crear el proveedor **Google** en Supabase Auth (Authentication
+→ Providers → Google), con un Client ID/Secret de Google Cloud Console
+(Authorized redirect URI: `https://<tu-project-ref>.supabase.co/auth/v1/callback`).
+
+## 3. Correr en local
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre http://localhost:3000 — te manda a `/login`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 4. Tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run test:all   # lint + unit (Vitest) + build + e2e (Playwright) — el gate completo
+npm run test       # solo unit tests (rápido, sin credenciales)
+npm run test:e2e   # solo smoke tests E2E (usan credenciales dummy, no pegan a Supabase real)
+```
 
-## Learn More
+Los unit tests (`src/**/*.test.ts`) mockean los SDKs de Anthropic/OpenAI —
+no gastan API real. Los E2E de Playwright corren contra `next dev` con
+variables de entorno dummy y validan redirects de autenticación; **no**
+cubren el flujo real de login con Google ni el parseo real de un PDF —
+eso se prueba a mano (ver checklist abajo) hasta tener un proyecto Supabase
+de prueba dedicado a CI.
 
-To learn more about Next.js, take a look at the following resources:
+**Antes de dar por terminado cualquier cambio, corre `npm run test:all` y
+que quede en verde.**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 5. Prueba manual end-to-end (con credenciales reales)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Login con Google.
+2. Configuración → agrega una API key de Anthropic u OpenAI.
+3. Subir PDF → sube un estado de cuenta real → revisa que los movimientos y
+   planes MSI queden bien en el Dashboard.
+4. Dashboard → revisa Resumen / Desglose / Movimientos / Próximo Mes /
+   Validación.
+5. Chat → pregúntale algo sobre un movimiento real.
 
-## Deploy on Vercel
+## 6. Deploy a Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx vercel login       # abre el navegador para autenticarte — hazlo tú, no por mí
+npx vercel link
+npx vercel env add NEXT_PUBLIC_SUPABASE_URL production
+npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+npx vercel env add ENCRYPTION_KEY production
+npx vercel --prod
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+También agrega en Supabase Auth la URL de producción a "Redirect URLs"
+(`https://tu-dominio.vercel.app/auth/callback`) y en Google Cloud Console a
+los "Authorized redirect URIs".
