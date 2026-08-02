@@ -2,8 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { MonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
+import type {
+  MonthlyDashboardData,
+  RelevantTransaction,
+} from "@/lib/dashboard/get-monthly-data";
 import { BudgetQuickAdd } from "./budget-quick-add";
+import {
+  FlujoDelMesChart,
+  GastoPorCategoriaChart,
+  GastoPorTarjetaChart,
+} from "./charts";
 
 const TABS = [
   { id: "resumen", label: "📊 Resumen del Mes" },
@@ -463,6 +471,15 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
 
       <MonthlyInsightsPanel data={data} />
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Panel title="Flujo del Mes">
+          <FlujoDelMesChart data={data} />
+        </Panel>
+        <Panel title="Gasto por Tarjeta">
+          <GastoPorTarjetaChart data={data} />
+        </Panel>
+      </div>
+
       <Panel title="Estado de Tarjetas">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -639,6 +656,10 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         </ul>
       </Panel>
 
+      <Panel title="Gasto por Categoría (estimado)">
+        <GastoPorCategoriaChart data={data} />
+      </Panel>
+
       <Panel title="Agregar ingreso, costo fijo o deuda familiar/largo plazo">
         {data.monthLabel && <BudgetQuickAdd month={data.monthLabel} />}
       </Panel>
@@ -646,46 +667,61 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
-function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
+function MovimientosPorTarjetaTable({
+  transactions,
+}: {
+  transactions: RelevantTransaction[];
+}) {
   return (
-    <Panel title="Movimientos Relevantes (top 10 por monto)">
-      {data.relevantTransactions.length === 0 ? (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+          <th className="pb-2 pr-4">Descripción</th>
+          <th className="pb-2 pr-4">Monto</th>
+          <th className="pb-2 pr-4">Tipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {transactions.map((t) => (
+          <tr key={t.id} className="border-b border-zinc-800/60">
+            <td className="py-2 pr-4 text-zinc-200">
+              {t.description}
+              <div className="text-[11px] text-zinc-500">{t.date}</div>
+            </td>
+            <td className="py-2 pr-4 font-medium text-zinc-100">
+              {money(t.amount)}
+            </td>
+            <td className="py-2 pr-4">
+              <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                {t.type}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
+  if (data.relevantTransactionsByAccount.length === 0) {
+    return (
+      <Panel title="Movimientos Relevantes">
         <p className="text-sm text-zinc-500">
           No hay movimientos para este periodo.
         </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
-                <th className="pb-2 pr-4">Fecha</th>
-                <th className="pb-2 pr-4">Tarjeta</th>
-                <th className="pb-2 pr-4">Descripción</th>
-                <th className="pb-2 pr-4">Tipo</th>
-                <th className="pb-2 pr-4">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.relevantTransactions.map((t) => (
-                <tr key={t.id} className="border-b border-zinc-800/60">
-                  <td className="py-2 pr-4 text-zinc-400">{t.date}</td>
-                  <td className="py-2 pr-4">{t.accountLabel}</td>
-                  <td className="py-2 pr-4 text-zinc-200">{t.description}</td>
-                  <td className="py-2 pr-4">
-                    <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                      {t.type}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4 font-medium text-zinc-100">
-                    {money(t.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Panel>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {data.relevantTransactionsByAccount.map((group) => (
+        <Panel key={group.accountId} title={`Movimientos Relevantes — ${group.accountLabel}`}>
+          <MovimientosPorTarjetaTable transactions={group.transactions} />
+        </Panel>
+      ))}
+    </div>
   );
 }
 

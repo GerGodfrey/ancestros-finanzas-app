@@ -83,7 +83,6 @@ export interface MonthlyDashboardData {
   incomes: { concept: string; amount: number }[];
   fixedCosts: { concept: string; amount: number }[];
   msiPlans: MsiPlanSummary[];
-  relevantTransactions: RelevantTransaction[];
   relevantTransactionsByAccount: {
     accountId: string;
     accountLabel: string;
@@ -114,7 +113,6 @@ const EMPTY_DATA: MonthlyDashboardData = {
   incomes: [],
   fixedCosts: [],
   msiPlans: [],
-  relevantTransactions: [],
   relevantTransactionsByAccount: [],
   categoryBreakdown: [],
   uncategorizedCount: 0,
@@ -405,7 +403,7 @@ export async function getMonthlyDashboardData(
   const saldoDisponibleGastoLibre =
     ingresoTotal - (egresoDebito + msiMensualTotal);
 
-  // --- Movimientos relevantes: top 10 global + top 6 por tarjeta ---
+  // --- Movimientos relevantes: top 6 por tarjeta ---
   const transactionsList = transactions ?? [];
   const toRelevant = (t: (typeof transactionsList)[number]): RelevantTransaction => ({
     id: t.id,
@@ -415,11 +413,6 @@ export async function getMonthlyDashboardData(
     type: t.type,
     date: t.tx_date,
   });
-  const relevantTransactions: RelevantTransaction[] = transactionsList
-    .slice()
-    .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
-    .slice(0, 10)
-    .map(toRelevant);
 
   const relevantTransactionsByAccount = statementsInMonth
     .map((s) => {
@@ -516,7 +509,6 @@ export async function getMonthlyDashboardData(
       amount: Number(f.amount),
     })),
     msiPlans,
-    relevantTransactions,
     relevantTransactionsByAccount,
     categoryBreakdown,
     uncategorizedCount,
