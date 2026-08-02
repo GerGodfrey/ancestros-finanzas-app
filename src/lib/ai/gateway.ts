@@ -1,16 +1,23 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
 
-// Gateway multi-proveedor: una sola interfaz para llamar a Anthropic u OpenAI
-// con la API key del propio usuario (BYOK). Equivalente casero al patrón de
-// LiteLLM, pero en TypeScript puro para no salir del runtime de Vercel.
+// Gateway multi-proveedor: una sola interfaz para llamar a Anthropic, OpenAI,
+// Google Gemini o DeepSeek con la API key del propio usuario (BYOK).
+// Equivalente casero al patrón de LiteLLM, pero en TypeScript puro para no
+// salir del runtime de Vercel.
+//
+// DeepSeek expone una API compatible con la de OpenAI (mismo SDK, solo
+// cambia baseURL), así que reutiliza la misma implementación que OpenAI.
+// Gemini tiene su propio SDK (@google/genai) y su propio formato de
+// tool-calling, por eso tiene funciones dedicadas.
 //
 // Usado por: el Skill de parseo de PDFs (Fase 2) y el chatbot (Fase 4).
 // El "modo orquestador" (combinar más de un proveedor) se construye encima
 // de esta función en una fase posterior — esta capa ya lo deja preparado
 // porque cada llamada es independiente y normalizada.
 
-export type Provider = "anthropic" | "openai";
+export type Provider = "anthropic" | "openai" | "gemini" | "deepseek";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -25,11 +32,11 @@ export interface GatewayChatOptions {
   messages: ChatMessage[];
   maxTokens?: number;
   /**
-   * PDF adjunto en base64. Solo soportado nativamente por Anthropic (lee el
-   * documento completo, incluyendo tablas y layout). Para OpenAI, quien
-   * llama debe extraer el texto del PDF antes (ver src/lib/ai/parse-statement.ts)
-   * e incluirlo como texto en `messages` — pasar `pdfBase64` con provider
-   * 'openai' lanza un error.
+   * PDF adjunto en base64. Soportado nativamente por Anthropic y Gemini
+   * (leen el documento completo, incluyendo tablas y layout). Para OpenAI y
+   * DeepSeek, quien llama debe extraer el texto del PDF antes (ver
+   * src/lib/ai/parse-statement.ts) e incluirlo como texto en `messages` —
+   * pasar `pdfBase64` con esos proveedores lanza un error.
    */
   pdfBase64?: string;
 }
@@ -41,11 +48,15 @@ export interface GatewayChatResult {
   raw: unknown;
 }
 
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+
 const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: process.env.ANTHROPIC_DEFAULT_MODEL ?? "claude-sonnet-5",
   // Ajustar cuando se confirme el modelo por defecto que se quiera ofrecer;
   // se puede sobreescribir por request y por variable de entorno.
   openai: process.env.OPENAI_DEFAULT_MODEL ?? "gpt-4o",
+  gemini: process.env.GEMINI_DEFAULT_MODEL ?? "gemini-2.5-flash",
+  deepseek: process.env.DEEPSEEK_DEFAULT_MODEL ?? "deepseek-chat",
 };
 
 export async function chat(
@@ -56,12 +67,18 @@ export async function chat(
   if (opts.provider === "anthropic") {
     return chatAnthropic({ ...opts, model });
   }
+  if (opts.provider === "gemini") {
+    return chatGemini({ ...opts, model });
+  }
   if (opts.pdfBase64) {
     throw new Error(
-      "OpenAI no soporta adjuntar PDF directamente en este gateway — extrae el texto primero (ver parse-statement.ts).",
+      "Este proveedor no soporta adjuntar PDF directamente en este gateway — extrae el texto primero (ver parse-statement.ts).",
     );
   }
-  return chatOpenAI({ ...opts, model });
+  return chatOpenAICompatible(
+    { ...opts, model },
+    opts.provider as "openai" | "deepseek",
+  );
 }
 
 async function chatAnthropic(
@@ -109,10 +126,14 @@ async function chatAnthropic(
   return { text, provider: "anthropic", model: opts.model, raw: response };
 }
 
-async function chatOpenAI(
+async function chatOpenAICompatible(
   opts: GatewayChatOptions & { model: string },
+  provider: "openai" | "deepseek",
 ): Promise<GatewayChatResult> {
-  const client = new OpenAI({ apiKey: opts.apiKey });
+  const client = new OpenAI({
+    apiKey: opts.apiKey,
+    baseURL: provider === "deepseek" ? DEEPSEEK_BASE_URL : undefined,
+  });
 
   const response = await client.chat.completions.create({
     model: opts.model,
@@ -127,7 +148,48 @@ async function chatOpenAI(
 
   const text = response.choices[0]?.message?.content ?? "";
 
-  return { text, provider: "openai", model: opts.model, raw: response };
+  return { text, provider, model: opts.model, raw: response };
+}
+
+function toGeminiRole(role: "user" | "assistant"): "user" | "model" {
+  return role === "assistant" ? "model" : "user";
+}
+
+async function chatGemini(
+  opts: GatewayChatOptions & { model: string },
+): Promise<GatewayChatResult> {
+  const client = new GoogleGenAI({ apiKey: opts.apiKey });
+
+  const contents: Content[] = opts.messages.map((m, i) => {
+    const isLastUserMessage =
+      m.role === "user" && i === opts.messages.length - 1;
+    const parts: Part[] = [];
+
+    if (isLastUserMessage && opts.pdfBase64) {
+      parts.push({
+        inlineData: { mimeType: "application/pdf", data: opts.pdfBase64 },
+      });
+    }
+    parts.push({ text: m.content });
+
+    return { role: toGeminiRole(m.role), parts };
+  });
+
+  const response = await client.models.generateContent({
+    model: opts.model,
+    contents,
+    config: {
+      systemInstruction: opts.system,
+      maxOutputTokens: opts.maxTokens ?? 4096,
+    },
+  });
+
+  return {
+    text: response.text ?? "",
+    provider: "gemini",
+    model: opts.model,
+    raw: response,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +247,13 @@ export async function runAgent(
   if (opts.provider === "anthropic") {
     return runAgentAnthropic({ ...opts, model, maxSteps });
   }
-  return runAgentOpenAI({ ...opts, model, maxSteps });
+  if (opts.provider === "gemini") {
+    return runAgentGemini({ ...opts, model, maxSteps });
+  }
+  return runAgentOpenAICompatible(
+    { ...opts, model, maxSteps },
+    opts.provider as "openai" | "deepseek",
+  );
 }
 
 async function runAgentAnthropic(
@@ -247,10 +315,14 @@ async function runAgentAnthropic(
   );
 }
 
-async function runAgentOpenAI(
+async function runAgentOpenAICompatible(
   opts: GatewayAgentOptions & { model: string; maxSteps: number },
+  provider: "openai" | "deepseek",
 ): Promise<GatewayAgentResult> {
-  const client = new OpenAI({ apiKey: opts.apiKey });
+  const client = new OpenAI({
+    apiKey: opts.apiKey,
+    baseURL: provider === "deepseek" ? DEEPSEEK_BASE_URL : undefined,
+  });
   const tools: OpenAI.Chat.ChatCompletionTool[] = opts.tools.map((t) => ({
     type: "function",
     function: {
@@ -283,7 +355,7 @@ async function runAgentOpenAI(
     if (!message.tool_calls || message.tool_calls.length === 0) {
       return {
         text: message.content ?? "",
-        provider: "openai",
+        provider,
         model: opts.model,
         toolCalls,
       };
@@ -303,6 +375,70 @@ async function runAgentOpenAI(
         content: JSON.stringify(result),
       });
     }
+  }
+
+  throw new Error(
+    `El agente alcanzó el límite de ${opts.maxSteps} pasos sin dar una respuesta final.`,
+  );
+}
+
+async function runAgentGemini(
+  opts: GatewayAgentOptions & { model: string; maxSteps: number },
+): Promise<GatewayAgentResult> {
+  const client = new GoogleGenAI({ apiKey: opts.apiKey });
+  const tools = [
+    {
+      functionDeclarations: opts.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        parametersJsonSchema: t.inputSchema,
+      })),
+    },
+  ];
+
+  const contents: Content[] = opts.messages.map((m) => ({
+    role: toGeminiRole(m.role),
+    parts: [{ text: m.content }],
+  }));
+  const toolCalls: AgentToolCallTrace[] = [];
+
+  for (let step = 0; step < opts.maxSteps; step++) {
+    const response = await client.models.generateContent({
+      model: opts.model,
+      contents,
+      config: {
+        systemInstruction: opts.system,
+        maxOutputTokens: opts.maxTokens ?? 4096,
+        tools,
+      },
+    });
+
+    const functionCalls = response.functionCalls ?? [];
+    const responseParts =
+      response.candidates?.[0]?.content?.parts ?? [{ text: response.text ?? "" }];
+    contents.push({ role: "model", parts: responseParts });
+
+    if (functionCalls.length === 0) {
+      return {
+        text: response.text ?? "",
+        provider: "gemini",
+        model: opts.model,
+        toolCalls,
+      };
+    }
+
+    const resultParts: Part[] = [];
+    for (const call of functionCalls) {
+      const name = call.name ?? "";
+      const input = (call.args ?? {}) as Record<string, unknown>;
+      const result = await opts.executeTool({ name, input });
+      toolCalls.push({ name, input, result });
+      resultParts.push({
+        functionResponse: { name, response: { result } },
+      });
+    }
+
+    contents.push({ role: "user", parts: resultParts });
   }
 
   throw new Error(

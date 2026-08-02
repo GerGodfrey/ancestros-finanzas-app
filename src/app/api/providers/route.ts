@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { encryptSecret, decryptSecret, maskApiKey } from "@/lib/crypto";
 import { verifyApiKey, type Provider } from "@/lib/ai/gateway";
 
-const VALID_PROVIDERS: Provider[] = ["anthropic", "openai"];
+const VALID_PROVIDERS: Provider[] = [
+  "anthropic",
+  "openai",
+  "gemini",
+  "deepseek",
+];
 
 export async function GET() {
   const supabase = await createClient();

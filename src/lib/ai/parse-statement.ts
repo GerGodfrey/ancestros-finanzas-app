@@ -64,11 +64,14 @@ export async function parseStatementPdf(opts: {
     "Extrae los datos de este estado de cuenta según las instrucciones. Responde solo con el JSON, nada más.";
   let pdfBase64: string | undefined;
 
-  if (opts.provider === "anthropic") {
+  const supportsNativePdf =
+    opts.provider === "anthropic" || opts.provider === "gemini";
+
+  if (supportsNativePdf) {
     pdfBase64 = opts.pdfBuffer.toString("base64");
   } else {
-    // OpenAI: extraemos el texto del PDF primero (sin capacidad nativa de
-    // leer PDFs en este gateway) y se lo damos como texto plano.
+    // OpenAI y DeepSeek: no leen PDF nativo en este gateway — extraemos el
+    // texto primero y se lo damos como texto plano.
     const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: opts.pdfBuffer });
     const { text } = await parser.getText();

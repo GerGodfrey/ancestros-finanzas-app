@@ -155,7 +155,7 @@ chat lee las últimas ~20 como contexto de cada nueva pregunta.
 ### `provider_credentials` — tus API keys de IA
 | Columna | Tipo | Nota |
 |---|---|---|
-| `provider` | text | `anthropic` \| `openai` |
+| `provider` | text | `anthropic` \| `openai` \| `gemini` \| `deepseek` |
 | `api_key_encrypted` | text | cifrada con AES-256-GCM antes de llegar aquí, nunca en texto plano |
 | `is_active` | boolean | cuál se usa ahora mismo para parsear/chatear |
 | `orchestrator_enabled` | boolean | para cuando se construya el modo orquestador (combinar proveedores) |

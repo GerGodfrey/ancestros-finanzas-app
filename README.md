@@ -1,8 +1,9 @@
 # Finanzas
 
 Webapp de finanzas personales: sube los PDFs de tus estados de cuenta, se
-leen automáticamente con IA (Anthropic u OpenAI, a tu elección), y tienes un
-dashboard mensual + un chatbot que puede consultar todo tu historial real.
+leen automáticamente con IA (Anthropic, OpenAI, Google Gemini o DeepSeek —
+a tu elección), y tienes un dashboard mensual + un chatbot que puede
+consultar todo tu historial real.
 
 Ver el plan de arquitectura completo en
 `/Users/lggc/.claude/plans/compiled-petting-riddle.md`.
@@ -11,8 +12,10 @@ Ver el plan de arquitectura completo en
 
 - Next.js 16 (App Router) + TypeScript + Tailwind
 - Supabase: Postgres (RLS por usuario), Auth (Google OAuth), Storage
-- Gateway multi-proveedor propio (`src/lib/ai/gateway.ts`) — Anthropic u
-  OpenAI, con la API key que cada usuario guarda cifrada en Configuración
+- Gateway multi-proveedor propio (`src/lib/ai/gateway.ts`) — Anthropic,
+  OpenAI, Google Gemini o DeepSeek, con la API key que cada usuario guarda
+  cifrada en Configuración (DeepSeek reutiliza el SDK de OpenAI apuntando a
+  `api.deepseek.com`, ya que su API es compatible)
 - El Skill de parseo de PDFs vive en `skills/pdf-statement-parser/`
 
 ## 1. Configuración inicial
@@ -66,8 +69,8 @@ npm run test       # solo unit tests (rápido, sin credenciales)
 npm run test:e2e   # solo smoke tests E2E (usan credenciales dummy, no pegan a Supabase real)
 ```
 
-Los unit tests (`src/**/*.test.ts`) mockean los SDKs de Anthropic/OpenAI —
-no gastan API real. Los E2E de Playwright corren contra `next dev` con
+Los unit tests (`src/**/*.test.ts`) mockean los SDKs de los 4 proveedores
+(Anthropic, OpenAI, Gemini, DeepSeek) — no gastan API real. Los E2E de Playwright corren contra `next dev` con
 variables de entorno dummy y validan redirects de autenticación; **no**
 cubren el flujo real de login con Google ni el parseo real de un PDF —
 eso se prueba a mano (ver checklist abajo) hasta tener un proyecto Supabase
@@ -79,7 +82,10 @@ que quede en verde.**
 ## 5. Prueba manual end-to-end (con credenciales reales)
 
 1. Login con Google.
-2. Configuración → agrega una API key de Anthropic u OpenAI.
+2. Configuración → agrega una API key (Anthropic, OpenAI, Gemini o
+   DeepSeek — Gemini tiene un tier gratis permanente sin tarjeta, vía
+   [Google AI Studio](https://aistudio.google.com/apikey), si quieres
+   probar sin gastar).
 3. Subir PDF → sube un estado de cuenta real → revisa que los movimientos y
    planes MSI queden bien en el Dashboard.
 4. Dashboard → revisa Resumen / Desglose / Movimientos / Próximo Mes /

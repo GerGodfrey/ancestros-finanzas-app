@@ -123,6 +123,26 @@ describe("parseStatementPdf", () => {
     );
   });
 
+  it("adjunta el PDF nativo (pdfBase64) para Anthropic y Gemini", async () => {
+    chatMock.mockResolvedValue({
+      text: JSON.stringify(VALID_EXTRACTION),
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      raw: {},
+    });
+
+    await parseStatementPdf({
+      provider: "gemini",
+      apiKey: "fake-key",
+      pdfBuffer: Buffer.from("fake-pdf-bytes"),
+    });
+
+    const callArgs = chatMock.mock.calls[0][0];
+    expect(callArgs.pdfBase64).toBe(
+      Buffer.from("fake-pdf-bytes").toString("base64"),
+    );
+  });
+
   it("lanza un error legible si el modelo no devuelve JSON válido", async () => {
     chatMock.mockResolvedValue({
       text: "Lo siento, no puedo procesar este PDF.",

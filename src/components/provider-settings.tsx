@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Provider = "anthropic" | "openai";
+type Provider = "anthropic" | "openai" | "gemini" | "deepseek";
 
 type ProviderRow = {
   id: string;
@@ -16,6 +16,8 @@ type ProviderRow = {
 const PROVIDER_LABEL: Record<Provider, string> = {
   anthropic: "Anthropic (Claude)",
   openai: "OpenAI",
+  gemini: "Google Gemini",
+  deepseek: "DeepSeek",
 };
 
 export function ProviderSettings() {
@@ -136,6 +138,8 @@ export function ProviderSettings() {
             >
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="deepseek">DeepSeek</option>
             </select>
           </div>
 
