@@ -81,6 +81,28 @@ export async function POST(
 
   const { data: parsed, warnings } = result;
   const s = parsed.statement as Record<string, unknown>;
+  const a = parsed.account as Record<string, unknown>;
+
+  // 0) Sincroniza límite/tasas de la cuenta con lo que diga el PDF más
+  // reciente (el usuario suele crear la tarjeta sin estos datos a mano,
+  // antes de tener un PDF que los traiga — y el banco los puede cambiar).
+  const accountUpdate: Record<string, unknown> = {};
+  if (a.credit_limit !== undefined && a.credit_limit !== null) {
+    accountUpdate.credit_limit = a.credit_limit;
+  }
+  if (a.rate_ordinaria !== undefined && a.rate_ordinaria !== null) {
+    accountUpdate.rate_ordinaria = a.rate_ordinaria;
+  }
+  if (a.rate_moratoria !== undefined && a.rate_moratoria !== null) {
+    accountUpdate.rate_moratoria = a.rate_moratoria;
+  }
+  if (Object.keys(accountUpdate).length > 0) {
+    await supabase
+      .from("accounts")
+      .update(accountUpdate)
+      .eq("id", statement.account_id)
+      .eq("user_id", user.id);
+  }
 
   // 1) Actualiza la fila de statements con los datos extraídos
   const { error: updateError } = await supabase

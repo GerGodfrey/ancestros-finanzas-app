@@ -127,13 +127,6 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
           value={money(data.balance)}
           tone={data.balance >= 0 ? "good" : "bad"}
         />
-        <Kpi label="Gasto Total Tarjetas" value={money(data.gastoTarjetas)} />
-        <Kpi label="MSI Mensual" value={money(data.msiMensualTotal)} tone="warn" />
-        <Kpi
-          label="Disponible Gasto Libre"
-          value={money(data.saldoDisponibleGastoLibre)}
-          tone={data.saldoDisponibleGastoLibre >= 0 ? "good" : "bad"}
-        />
       </div>
 
       <Panel title="Estado de Tarjetas">
