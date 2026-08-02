@@ -55,7 +55,7 @@ const DEFAULT_MODELS: Record<Provider, string> = {
   // Ajustar cuando se confirme el modelo por defecto que se quiera ofrecer;
   // se puede sobreescribir por request y por variable de entorno.
   openai: process.env.OPENAI_DEFAULT_MODEL ?? "gpt-4o",
-  gemini: process.env.GEMINI_DEFAULT_MODEL ?? "gemini-2.5-flash",
+  gemini: process.env.GEMINI_DEFAULT_MODEL ?? "gemini-3.6-flash",
   deepseek: process.env.DEEPSEEK_DEFAULT_MODEL ?? "deepseek-chat",
 };
 
