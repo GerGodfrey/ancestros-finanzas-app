@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
-import { regenerateMonthlyInsights } from "@/lib/ai/monthly-insights";
+import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
 import type { Provider } from "@/lib/ai/gateway";
 
 // Regenera a mano los insights narrativos de un mes (botón "Regenerar
@@ -41,14 +41,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const insights = await regenerateMonthlyInsights({
+    const summary = await regenerateMonthlySummary({
       supabase,
       userId: user.id,
       provider: credential.provider as Provider,
       apiKey: decryptSecret(credential.api_key_encrypted),
       month,
     });
-    return NextResponse.json({ ok: true, insights });
+    return NextResponse.json({
+      ok: true,
+      insights: summary.insights,
+      recommendations: summary.recommendations,
+    });
   } catch (err) {
     return NextResponse.json(
       {

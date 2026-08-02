@@ -158,17 +158,26 @@ la deuda de MSI restante de las tarjetas (`msi_plans`, calculada como
 | `amount` | numeric | |
 | `note` | text | opcional, ej. "No se paga este mes" |
 
-### `monthly_summaries` — insights narrativos del mes
-Por ahora solo se usa la columna `insights` (jsonb): un array de exactamente
-3 `{ text, tone }` ("3 cosas que pasaron este mes que vale la pena que
-veas", igual que en el dashboard viejo). Se genera con IA a partir del
-`raw_extraction` de los statements del mes actual + el anterior (para dar
-seguimiento a alertas previas), y se dispara solo al terminar de parsear un
-statement (`regenerateMonthlyInsights` en `src/lib/ai/monthly-insights.ts`),
-o a mano desde el botón "Regenerar análisis" del dashboard
-(`/api/insights/generate`). Las columnas `income_total`/`expense_total`/
-`balance` siguen sin usarse — `get-monthly-data.ts` las sigue calculando al
-vuelo; cachearlas ahí es una optimización futura, no bloquea nada de esto.
+### `monthly_summaries` — insights + recomendaciones del mes
+Se usan dos columnas jsonb, generadas juntas en la misma llamada al modelo
+(`regenerateMonthlySummary` en `src/lib/ai/monthly-insights.ts`) para no
+duplicar costo de API:
+
+- `insights`: array de exactamente 3 `{ text, tone }` ("3 cosas que pasaron
+  este mes que vale la pena que veas") — usa el `raw_extraction` de los
+  statements del mes actual + el anterior.
+- `recommendations`: array de 2 a 4 `{ text, type }` con `type` = `strength`
+  (algo que el usuario ha hecho bien de forma consistente) o `action` (algo
+  que debería cambiar) — "🎯 Recomendaciones y Próximos Pasos". Además del
+  mes actual/anterior, el prompt recibe hasta 6 meses de historial
+  *resumido* (los `insights` ya guardados de esos meses, no el JSON crudo
+  completo — barato y ya "curado") para detectar patrones repetidos.
+
+Se dispara solo al terminar de parsear un statement, o a mano desde el
+botón "Regenerar análisis" del dashboard (`/api/insights/generate`). Las
+columnas `income_total`/`expense_total`/`balance` siguen sin usarse —
+`get-monthly-data.ts` las sigue calculando al vuelo; cachearlas ahí es una
+optimización futura, no bloquea nada de esto.
 
 ### `chat_messages` — historial del chatbot
 Conversación completa, por usuario, en orden cronológico. El endpoint de

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
 import { parseStatementPdf } from "@/lib/ai/parse-statement";
-import { regenerateMonthlyInsights } from "@/lib/ai/monthly-insights";
+import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
 import type { Provider } from "@/lib/ai/gateway";
 
 export async function POST(
@@ -200,13 +200,14 @@ export async function POST(
     }
   }
 
-  // 4) Regenera los insights narrativos del mes ("3 cosas que pasaron este
-  // mes") con los datos ya guardados — no bloquea la respuesta si falla, ya
-  // que el parseo en sí ya terminó bien.
+  // 4) Regenera los insights + recomendaciones del mes ("3 cosas que
+  // pasaron este mes" y "Recomendaciones y Próximos Pasos") con los datos
+  // ya guardados — no bloquea la respuesta si falla, ya que el parseo en sí
+  // ya terminó bien.
   let insightsError: string | null = null;
   if (s.period_end) {
     try {
-      await regenerateMonthlyInsights({
+      await regenerateMonthlySummary({
         supabase,
         userId: user.id,
         provider,

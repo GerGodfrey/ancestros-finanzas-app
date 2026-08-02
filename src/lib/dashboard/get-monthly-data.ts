@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { MonthlyInsight } from "@/lib/ai/monthly-insights";
+import type { MonthlyInsight, Recommendation } from "@/lib/ai/monthly-insights";
 
 export interface CardSummary {
   accountId: string;
@@ -70,6 +70,7 @@ export interface MonthlyDashboardData {
   relevantTransactions: RelevantTransaction[];
   validationIssues: ValidationIssue[];
   insights: MonthlyInsight[] | null;
+  recommendations: Recommendation[] | null;
   previousMonthCardsTotal: number | null;
   msiDebts: MsiDebtSummary[];
   standingDebts: StandingDebt[];
@@ -92,6 +93,7 @@ const EMPTY_DATA: MonthlyDashboardData = {
   relevantTransactions: [],
   validationIssues: [],
   insights: null,
+  recommendations: null,
   previousMonthCardsTotal: null,
   msiDebts: [],
   standingDebts: [],
@@ -169,7 +171,7 @@ export async function getMonthlyDashboardData(
       .eq("status", "active"),
     supabase
       .from("monthly_summaries")
-      .select("insights")
+      .select("insights, recommendations")
       .eq("user_id", user.id)
       .eq("month", month)
       .maybeSingle(),
@@ -361,6 +363,8 @@ export async function getMonthlyDashboardData(
     relevantTransactions,
     validationIssues,
     insights: (monthlySummary?.insights as MonthlyInsight[] | null) ?? null,
+    recommendations:
+      (monthlySummary?.recommendations as Recommendation[] | null) ?? null,
     previousMonthCardsTotal,
     msiDebts,
     standingDebts,

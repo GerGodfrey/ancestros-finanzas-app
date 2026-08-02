@@ -351,6 +351,81 @@ function PanoramaDeDeudasPanel({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+const RECOMMENDATION_TYPE_STYLE = {
+  strength: { icon: "✅", text: "text-emerald-400", label: "Lo haces bien" },
+  action: { icon: "🎯", text: "text-sky-400", label: "Próximo paso" },
+} as const;
+
+function RecommendationsPanel({ data }: { data: MonthlyDashboardData }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const regenerate = async () => {
+    if (!data.monthLabel) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/insights/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: data.monthLabel }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-sky-700/40 bg-sky-950/10 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-sky-200">
+          <span className="h-4 w-0.5 rounded bg-sky-500" />
+          🎯 Recomendaciones y Próximos Pasos
+        </h2>
+        <button
+          onClick={regenerate}
+          disabled={loading}
+          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-medium text-zinc-400 hover:text-zinc-100 disabled:opacity-50"
+        >
+          {loading ? "Generando…" : "Regenerar análisis"}
+        </button>
+      </div>
+
+      {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+
+      {data.recommendations && data.recommendations.length > 0 ? (
+        <ul className="flex flex-col gap-3 text-sm text-zinc-300">
+          {data.recommendations.map((rec, idx) => {
+            const style = RECOMMENDATION_TYPE_STYLE[rec.type] ?? RECOMMENDATION_TYPE_STYLE.action;
+            return (
+              <li key={idx} className="flex items-start gap-2">
+                <span
+                  className={`shrink-0 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style.text}`}
+                >
+                  {style.icon} {style.label}
+                </span>
+                <span>{rec.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-zinc-500">
+          Todavía no hay recomendaciones generadas para este mes — dale a
+          &quot;Regenerar análisis&quot; (se genera junto con &quot;3 cosas
+          que pasaron este mes&quot;).
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ResumenTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
@@ -417,6 +492,8 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
         <ProximosPagosPanel data={data} />
         <PanoramaDeDeudasPanel data={data} />
       </div>
+
+      <RecommendationsPanel data={data} />
     </div>
   );
 }
