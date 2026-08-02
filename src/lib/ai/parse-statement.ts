@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import Ajv, { type ValidateFunction } from "ajv";
 import { chat, type Provider } from "@/lib/ai/gateway";
+import { extractJson } from "@/lib/ai/extract-json";
 
 const SKILL_DIR = path.join(process.cwd(), "skills", "pdf-statement-parser");
 
@@ -122,19 +123,4 @@ export async function parseStatementPdf(opts: {
   }
 
   return { data: json, warnings, schemaValid };
-}
-
-function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonText = fenced ? fenced[1] : trimmed;
-  try {
-    return JSON.parse(jsonText);
-  } catch {
-    const preview =
-      text.length > 1000
-        ? `${text.slice(0, 500)}\n...[${text.length - 1000} caracteres omitidos]...\n${text.slice(-500)}`
-        : text;
-    throw new Error(`El modelo no devolvió JSON válido. Respuesta cruda: ${preview}`);
-  }
 }

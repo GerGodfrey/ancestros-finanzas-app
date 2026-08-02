@@ -140,13 +140,17 @@ Configuración/Desglose del dashboard.
 Igual que `incomes` pero para gasto fijo recurrente que no pasa por
 tarjeta (renta, servicios, etc.). Mismo shape que `incomes`.
 
-### `monthly_summaries` — rollup cacheado
-Pensada para guardar, por mes, el ingreso/egreso/balance ya calculados +
-un resumen en texto plano, así el dashboard no tiene que recalcular todo
-cada vez y el chatbot tiene "memoria" barata de meses viejos sin releer
-transacción por transacción. **Definida en el esquema, todavía no se
-escribe desde ningún lado** — hoy `get-monthly-data.ts` calcula todo al
-vuelo en cada carga del dashboard; cachear aquí es una optimización futura.
+### `monthly_summaries` — insights narrativos del mes
+Por ahora solo se usa la columna `insights` (jsonb): un array de exactamente
+3 `{ text, tone }` ("3 cosas que pasaron este mes que vale la pena que
+veas", igual que en el dashboard viejo). Se genera con IA a partir del
+`raw_extraction` de los statements del mes actual + el anterior (para dar
+seguimiento a alertas previas), y se dispara solo al terminar de parsear un
+statement (`regenerateMonthlyInsights` en `src/lib/ai/monthly-insights.ts`),
+o a mano desde el botón "Regenerar análisis" del dashboard
+(`/api/insights/generate`). Las columnas `income_total`/`expense_total`/
+`balance` siguen sin usarse — `get-monthly-data.ts` las sigue calculando al
+vuelo; cachearlas ahí es una optimización futura, no bloquea nada de esto.
 
 ### `chat_messages` — historial del chatbot
 Conversación completa, por usuario, en orden cronológico. El endpoint de

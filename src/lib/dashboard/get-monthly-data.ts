@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { MonthlyInsight } from "@/lib/ai/monthly-insights";
 
 export interface CardSummary {
   accountId: string;
@@ -54,6 +55,7 @@ export interface MonthlyDashboardData {
   msiPlans: MsiPlanSummary[];
   relevantTransactions: RelevantTransaction[];
   validationIssues: ValidationIssue[];
+  insights: MonthlyInsight[] | null;
 }
 
 const EMPTY_DATA: MonthlyDashboardData = {
@@ -72,6 +74,7 @@ const EMPTY_DATA: MonthlyDashboardData = {
   msiPlans: [],
   relevantTransactions: [],
   validationIssues: [],
+  insights: null,
 };
 
 function monthKey(dateStr: string): string {
@@ -120,26 +123,36 @@ export async function getMonthlyDashboardData(
     (s) => s.period_end && monthKey(s.period_end as string) === monthPrefix,
   );
 
-  const [{ data: incomes }, { data: fixedCosts }, { data: msiPlansRaw }] =
-    await Promise.all([
-      supabase
-        .from("incomes")
-        .select("concept, amount")
-        .eq("user_id", user.id)
-        .eq("month", month),
-      supabase
-        .from("fixed_costs")
-        .select("concept, amount")
-        .eq("user_id", user.id)
-        .eq("month", month),
-      supabase
-        .from("msi_plans")
-        .select(
-          "concept, account_id, monthly_payment, installments_paid, total_installments",
-        )
-        .eq("user_id", user.id)
-        .eq("status", "active"),
-    ]);
+  const [
+    { data: incomes },
+    { data: fixedCosts },
+    { data: msiPlansRaw },
+    { data: monthlySummary },
+  ] = await Promise.all([
+    supabase
+      .from("incomes")
+      .select("concept, amount")
+      .eq("user_id", user.id)
+      .eq("month", month),
+    supabase
+      .from("fixed_costs")
+      .select("concept, amount")
+      .eq("user_id", user.id)
+      .eq("month", month),
+    supabase
+      .from("msi_plans")
+      .select(
+        "concept, account_id, monthly_payment, installments_paid, total_installments",
+      )
+      .eq("user_id", user.id)
+      .eq("status", "active"),
+    supabase
+      .from("monthly_summaries")
+      .select("insights")
+      .eq("user_id", user.id)
+      .eq("month", month)
+      .maybeSingle(),
+  ]);
 
   const statementIds = statementsInMonth.map((s) => s.id);
   const { data: transactions } = statementIds.length
@@ -275,5 +288,6 @@ export async function getMonthlyDashboardData(
     msiPlans,
     relevantTransactions,
     validationIssues,
+    insights: (monthlySummary?.insights as MonthlyInsight[] | null) ?? null,
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
 import { BudgetQuickAdd } from "./budget-quick-add";
 
@@ -116,6 +117,78 @@ export function DashboardTabs({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+const INSIGHT_TONE_STYLE = {
+  good: { icon: "✅", text: "text-emerald-400" },
+  bad: { icon: "🔴", text: "text-red-400" },
+  warning: { icon: "⚠️", text: "text-amber-400" },
+} as const;
+
+function MonthlyInsightsPanel({ data }: { data: MonthlyDashboardData }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const regenerate = async () => {
+    if (!data.monthLabel) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/insights/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: data.monthLabel }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-amber-700/40 bg-amber-950/10 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+          <span className="h-4 w-0.5 rounded bg-amber-500" />
+          🔎 3 cosas que pasaron este mes que vale la pena que veas
+        </h2>
+        <button
+          onClick={regenerate}
+          disabled={loading}
+          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-medium text-zinc-400 hover:text-zinc-100 disabled:opacity-50"
+        >
+          {loading ? "Generando…" : "Regenerar análisis"}
+        </button>
+      </div>
+
+      {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+
+      {data.insights && data.insights.length > 0 ? (
+        <ul className="flex flex-col gap-3 text-sm text-zinc-300">
+          {data.insights.map((insight, idx) => {
+            const style = INSIGHT_TONE_STYLE[insight.tone] ?? INSIGHT_TONE_STYLE.warning;
+            return (
+              <li key={idx}>
+                <span className={`font-semibold ${style.text}`}>
+                  {style.icon} {insight.text}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-zinc-500">
+          Todavía no hay análisis generado para este mes — dale a
+          &quot;Regenerar análisis&quot;.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ResumenTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
@@ -128,6 +201,8 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
           tone={data.balance >= 0 ? "good" : "bad"}
         />
       </div>
+
+      <MonthlyInsightsPanel data={data} />
 
       <Panel title="Estado de Tarjetas">
         <div className="overflow-x-auto">
