@@ -102,7 +102,7 @@ chatbot consultan para casi todo.
 | `amount` | numeric | positivo = cargo, negativo = pago/abono |
 | `type` | text | `regular` \| `msi` \| `interest` \| `fee` \| `payment` |
 | `msi_plan_id` | uuid (FK, opcional) | si `type = 'msi'`, a qué plan pertenece |
-| `category` | text | **no poblada todavía** — categorización automática es Fase 5 |
+| `category` | text | `comida` \| `ropa` \| `transporte` \| `hogar` \| `entretenimiento` \| `tech` \| `viaje` \| `salud` \| `intereses_comisiones` \| `otros` (ver `src/lib/transaction-categories.ts`). La asigna el Skill al parsear cada PDF nuevo; para transacciones guardadas antes de esto existe un backfill manual (`/api/transactions/categorize`, botón "Categorizar movimientos" en Desglose) que la asigna sin re-leer el PDF |
 
 ### `msi_plans` — meses sin intereses activos
 Una fila por plan (no por mensualidad individual). Se actualiza cada vez

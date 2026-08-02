@@ -120,6 +120,40 @@ Layout más compacto, tarjeta departamental:
 - `payment`: abonos/pagos del usuario ("SU ABONO...GRACIAS", "GRACIAS POR SU
   PAGO...").
 
+## Clasificación de gasto (`category`)
+
+Cada movimiento también lleva una `category` (distinta de `type` — `type`
+dice CÓMO se pagó, `category` dice QUÉ se compró). Úsala para que la app
+pueda mostrar "cuánto gastaste en restaurantes este mes" sin que el usuario
+tenga que categorizar nada a mano. Valores válidos y cómo reconocerlos por
+el nombre del comercio (los ejemplos son patrones reales vistos en estados
+de cuenta mexicanos):
+
+- `comida`: restaurantes, cafés, comida rápida, delivery (Rappi, Uber Eats),
+  Oxxo/supermercados cuando el monto y contexto sugieren consumo (no bienes
+  grandes). Ej. "TOKS", "WINGSTOP", "STARBUCKS", "RAPPI*".
+- `ropa`: tiendas de ropa/calzado/accesorios. Ej. "ZARA", "LIVERPOOL" (si es
+  ropa, no MSI de otra cosa), "BOUTIQUE...".
+- `transporte`: Uber, Didi, gasolineras, casetas, estacionamientos, taxis.
+- `hogar`: renta, servicios (CFE, agua, gas), muebles, artículos para la
+  casa, ferreterías.
+- `entretenimiento`: cine, streaming (Netflix, Spotify, Disney+), boletos de
+  eventos/conciertos (Ticketmaster), bares.
+- `tech`: Apple, Google, software/SaaS (Anthropic/Claude, ChatGPT, Wix),
+  electrónica, celulares.
+- `viaje`: aerolíneas, hoteles, agencias de viaje, cargos en moneda
+  extranjera claramente asociados a un viaje.
+- `salud`: farmacias, gimnasios (TotalPass, Smart Fit), consultorios,
+  seguros médicos.
+- `intereses_comisiones`: SIEMPRE que `type` sea `interest` o `fee` — sin
+  excepción, sin importar la descripción.
+- `otros`: cualquier cosa que no encaje con claridad, y SIEMPRE para
+  `type: payment` (abonos).
+
+Si la descripción no da pistas suficientes para categorías más específicas
+(común en cargos con nombres crípticos tipo "MERPAGO*XYZ123"), usa `otros`
+en vez de adivinar — no inventes una categoría solo por rellenar.
+
 ## Casos especiales confirmados (no asumir, verificar cada vez)
 
 - **Compra diferida a un solo pago** (ej. "ISHOPMIXUP... 0 de 1" o "1 de

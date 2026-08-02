@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import type { MonthlyInsight, Recommendation } from "@/lib/ai/monthly-insights";
+import {
+  isTransactionCategory,
+  type TransactionCategory,
+} from "@/lib/transaction-categories";
 
 export interface CardSummary {
   accountId: string;
@@ -14,6 +18,7 @@ export interface CardSummary {
   fechaPago: string | null;
   tasaOrdinaria: number | null;
   interesGenerado: number;
+  estadoTags: string[];
 }
 
 export interface RelevantTransaction {
@@ -53,9 +58,20 @@ export interface StandingDebt {
   note: string | null;
 }
 
+export interface CategoryBreakdownEntry {
+  category: TransactionCategory;
+  amount: number;
+}
+
+export interface StatusBadge {
+  text: string;
+  tone: "good" | "bad" | "warning";
+}
+
 export interface MonthlyDashboardData {
   hasData: boolean;
   monthLabel: string | null; // 'YYYY-MM-01'
+  statusBadge: StatusBadge | null;
   ingresoTotal: number;
   egresoDebito: number;
   gastoTarjetas: number;
@@ -68,6 +84,13 @@ export interface MonthlyDashboardData {
   fixedCosts: { concept: string; amount: number }[];
   msiPlans: MsiPlanSummary[];
   relevantTransactions: RelevantTransaction[];
+  relevantTransactionsByAccount: {
+    accountId: string;
+    accountLabel: string;
+    transactions: RelevantTransaction[];
+  }[];
+  categoryBreakdown: CategoryBreakdownEntry[];
+  uncategorizedCount: number;
   validationIssues: ValidationIssue[];
   insights: MonthlyInsight[] | null;
   recommendations: Recommendation[] | null;
@@ -79,6 +102,7 @@ export interface MonthlyDashboardData {
 const EMPTY_DATA: MonthlyDashboardData = {
   hasData: false,
   monthLabel: null,
+  statusBadge: null,
   ingresoTotal: 0,
   egresoDebito: 0,
   gastoTarjetas: 0,
@@ -91,6 +115,9 @@ const EMPTY_DATA: MonthlyDashboardData = {
   fixedCosts: [],
   msiPlans: [],
   relevantTransactions: [],
+  relevantTransactionsByAccount: [],
+  categoryBreakdown: [],
+  uncategorizedCount: 0,
   validationIssues: [],
   insights: null,
   recommendations: null,
@@ -105,6 +132,60 @@ function monthKey(dateStr: string): string {
 
 function firstOfMonth(dateStr: string): string {
   return `${monthKey(dateStr)}-01`;
+}
+
+const CASH_WITHDRAWAL_RE = /retiro|disposici[oó]n|cajero/i;
+
+// Anota cada tarjeta con lo que le pasó este mes comparado con el anterior —
+// mismo criterio que la columna "Estado" del dashboard viejo (ej. "🚨 Generó
+// intereses", "✅ Mejoró vs mes pasado"), calculado con datos ya guardados,
+// sin IA — así es instantáneo y no depende de qué proveedor tenga activo.
+function computeCardStatusTags(opts: {
+  current: { utilizacion: number | null; interesGenerado: number };
+  previous: { utilizacion: number | null; interesGenerado: number } | null;
+  hasCashWithdrawal: boolean;
+}): string[] {
+  const tags: string[] = [];
+
+  if (opts.hasCashWithdrawal) tags.push("⚠️ Retiro de efectivo");
+
+  if (opts.current.interesGenerado > 0) {
+    if (!opts.previous || opts.previous.interesGenerado === 0) {
+      tags.push("🚨 Generó intereses");
+    } else {
+      tags.push("🚨 Volvió a generar intereses");
+    }
+  } else if (opts.previous && opts.previous.interesGenerado > 0) {
+    tags.push("✅ Ya no generó intereses");
+  }
+
+  if (
+    opts.current.utilizacion !== null &&
+    opts.previous?.utilizacion !== null &&
+    opts.previous?.utilizacion !== undefined
+  ) {
+    const prevPct = opts.previous.utilizacion * 100;
+    const currPct = opts.current.utilizacion * 100;
+    if (prevPct - currPct >= 8) {
+      tags.push(
+        `✅ Mejoró vs mes pasado (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
+      );
+    } else if (currPct - prevPct >= 8) {
+      tags.push(
+        `⚠️ Subió utilización (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
+      );
+    }
+  }
+
+  if (
+    tags.length === 0 &&
+    opts.current.utilizacion !== null &&
+    opts.current.utilizacion <= 0.4
+  ) {
+    tags.push("✅ OK");
+  }
+
+  return tags;
 }
 
 export async function getMonthlyDashboardData(
@@ -186,7 +267,9 @@ export async function getMonthlyDashboardData(
   const { data: transactions } = statementIds.length
     ? await supabase
         .from("transactions")
-        .select("id, account_id, statement_id, tx_date, description, amount, type")
+        .select(
+          "id, account_id, statement_id, tx_date, description, amount, type, category",
+        )
         .eq("user_id", user.id)
         .in("statement_id", statementIds)
     : { data: [] };
@@ -195,6 +278,45 @@ export async function getMonthlyDashboardData(
     const a = accountById.get(accountId);
     return a ? `${a.issuer} ${a.product_name}` : "Cuenta";
   };
+
+  // --- Mes anterior (para comparar en "Próximos Pagos" y en la columna
+  // "Estado" de Estado de Tarjetas) ---
+  const [prevYear, prevM] = monthPrefix.split("-").map(Number);
+  const previousMonthPrefix = `${prevM === 1 ? prevYear - 1 : prevYear}-${String(prevM === 1 ? 12 : prevM - 1).padStart(2, "0")}`;
+  const previousMonthStatements = parsedStatements.filter(
+    (s) => s.period_end && monthKey(s.period_end as string) === previousMonthPrefix,
+  );
+  const previousMonthCardsTotal =
+    previousMonthStatements.length > 0
+      ? previousMonthStatements.reduce(
+          (sum, s) => sum + Number(s.payment_no_interest ?? 0),
+          0,
+        )
+      : null;
+
+  const previousMonthCardByAccount = new Map(
+    previousMonthStatements.map((s) => {
+      const account = accountById.get(s.account_id);
+      const raw = s.raw_extraction as
+        | { statement?: { available_credit?: number } }
+        | null
+        | undefined;
+      const disponible = raw?.statement?.available_credit ?? null;
+      const limite = account?.credit_limit ?? null;
+      const utilizacion =
+        limite && disponible !== null ? (limite - disponible) / limite : null;
+      return [
+        s.account_id,
+        { utilizacion, interesGenerado: Number(s.interest_charged ?? 0) },
+      ] as const;
+    }),
+  );
+
+  const accountsWithCashWithdrawal = new Set(
+    (transactions ?? [])
+      .filter((t) => CASH_WITHDRAWAL_RE.test(t.description))
+      .map((t) => t.account_id),
+  );
 
   // --- Tarjetas ---
   const cards: CardSummary[] = statementsInMonth.map((s) => {
@@ -210,6 +332,7 @@ export async function getMonthlyDashboardData(
     const deudaMsi = (msiPlansRaw ?? [])
       .filter((p) => p.account_id === s.account_id)
       .reduce((sum, p) => sum + Number(p.monthly_payment ?? 0), 0);
+    const interesGenerado = Number(s.interest_charged ?? 0);
 
     return {
       accountId: s.account_id,
@@ -223,23 +346,14 @@ export async function getMonthlyDashboardData(
       deudaMsi,
       fechaPago: s.due_date,
       tasaOrdinaria: account?.rate_ordinaria ?? null,
-      interesGenerado: Number(s.interest_charged ?? 0),
+      interesGenerado,
+      estadoTags: computeCardStatusTags({
+        current: { utilizacion, interesGenerado },
+        previous: previousMonthCardByAccount.get(s.account_id) ?? null,
+        hasCashWithdrawal: accountsWithCashWithdrawal.has(s.account_id),
+      }),
     };
   });
-
-  // --- Total del mes anterior (para comparar en "Próximos Pagos") ---
-  const [prevYear, prevM] = monthPrefix.split("-").map(Number);
-  const previousMonthPrefix = `${prevM === 1 ? prevYear - 1 : prevYear}-${String(prevM === 1 ? 12 : prevM - 1).padStart(2, "0")}`;
-  const previousMonthStatements = parsedStatements.filter(
-    (s) => s.period_end && monthKey(s.period_end as string) === previousMonthPrefix,
-  );
-  const previousMonthCardsTotal =
-    previousMonthStatements.length > 0
-      ? previousMonthStatements.reduce(
-          (sum, s) => sum + Number(s.payment_no_interest ?? 0),
-          0,
-        )
-      : null;
 
   // --- Panorama de deudas: MSI restante por cuenta (todas las cuentas, no
   // solo las que tuvieron statement este mes) ---
@@ -291,19 +405,56 @@ export async function getMonthlyDashboardData(
   const saldoDisponibleGastoLibre =
     ingresoTotal - (egresoDebito + msiMensualTotal);
 
-  // --- Movimientos relevantes: top 10 por monto absoluto ---
-  const relevantTransactions: RelevantTransaction[] = (transactions ?? [])
+  // --- Movimientos relevantes: top 10 global + top 6 por tarjeta ---
+  const transactionsList = transactions ?? [];
+  const toRelevant = (t: (typeof transactionsList)[number]): RelevantTransaction => ({
+    id: t.id,
+    accountLabel: accountLabel(t.account_id),
+    description: t.description,
+    amount: Number(t.amount),
+    type: t.type,
+    date: t.tx_date,
+  });
+  const relevantTransactions: RelevantTransaction[] = transactionsList
     .slice()
     .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
     .slice(0, 10)
-    .map((t) => ({
-      id: t.id,
-      accountLabel: accountLabel(t.account_id),
-      description: t.description,
-      amount: Number(t.amount),
-      type: t.type,
-      date: t.tx_date,
-    }));
+    .map(toRelevant);
+
+  const relevantTransactionsByAccount = statementsInMonth
+    .map((s) => {
+      const txs = transactionsList
+        .filter((t) => t.account_id === s.account_id)
+        .slice()
+        .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
+        .slice(0, 6)
+        .map(toRelevant);
+      return {
+        accountId: s.account_id,
+        accountLabel: accountLabel(s.account_id),
+        transactions: txs,
+      };
+    })
+    .filter((group) => group.transactions.length > 0);
+
+  // --- Gasto por categoría (excluye pagos/abonos, solo cargos positivos) ---
+  const categoryTotals = new Map<TransactionCategory, number>();
+  let uncategorizedCount = 0;
+  for (const t of transactionsList) {
+    const amount = Number(t.amount);
+    if (t.type === "payment" || amount <= 0) continue;
+    if (t.category === null || t.category === undefined) {
+      uncategorizedCount++;
+      continue;
+    }
+    const category = isTransactionCategory(t.category) ? t.category : "otros";
+    categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + amount);
+  }
+  const categoryBreakdown: CategoryBreakdownEntry[] = Array.from(
+    categoryTotals.entries(),
+  )
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
 
   // --- MSI plans (para pestaña Próximo Mes) ---
   const msiPlans: MsiPlanSummary[] = (msiPlansRaw ?? []).map((p) => ({
@@ -340,9 +491,14 @@ export async function getMonthlyDashboardData(
     }
   }
 
+  const statusBadge: StatusBadge = balance < 0
+    ? { text: "⚠️ Balance negativo este mes", tone: "bad" }
+    : { text: "✅ Balance positivo este mes", tone: "good" };
+
   return {
     hasData: true,
     monthLabel: month,
+    statusBadge,
     ingresoTotal,
     egresoDebito,
     gastoTarjetas,
@@ -361,6 +517,9 @@ export async function getMonthlyDashboardData(
     })),
     msiPlans,
     relevantTransactions,
+    relevantTransactionsByAccount,
+    categoryBreakdown,
+    uncategorizedCount,
     validationIssues,
     insights: (monthlySummary?.insights as MonthlyInsight[] | null) ?? null,
     recommendations:

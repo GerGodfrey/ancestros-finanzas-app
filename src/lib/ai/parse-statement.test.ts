@@ -30,6 +30,7 @@ const VALID_EXTRACTION = {
       description: "DOMINOS PIZZA CONDESA",
       amount: 755.0,
       type: "regular",
+      category: "comida",
     },
   ],
   msi_plans: [],

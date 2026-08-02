@@ -22,19 +22,21 @@ export interface MonthlySummaryResult {
 }
 
 // Un solo call genera insights + recomendaciones juntos (mismo contexto, un
-// solo costo de API) — la respuesta es corta en ambos casos, pero
-// recomendaciones incluye historial de hasta 6 meses en el prompt, así que
-// se deja algo más de margen de salida.
+// solo costo de API) — recomendaciones ahora pide más profundidad (5-7
+// items con agregación por categoría/comercio) e incluye historial de hasta
+// 6 meses, así que se deja más margen de salida que antes.
 const SUMMARY_MAX_TOKENS: Record<Provider, number> = {
-  anthropic: 3072,
-  openai: 3072,
-  gemini: 6144,
-  deepseek: 3072,
+  anthropic: 4096,
+  openai: 4096,
+  gemini: 8192,
+  deepseek: 4096,
 };
 
-const SYSTEM_PROMPT = `Eres un asistente financiero que ayuda a un usuario mexicano a entender qué pasó con sus tarjetas de crédito cada mes — el mismo criterio que usaría alguien que lee los estados de cuenta a mano y le explica al usuario lo importante, no un resumen genérico.
+const SYSTEM_PROMPT = `Eres un asistente financiero que ayuda a un usuario mexicano a entender qué pasó con sus tarjetas de crédito cada mes — el mismo criterio que usaría alguien que lee los estados de cuenta línea por línea y le explica al usuario lo importante, no un resumen genérico ni una lista de movimientos sin analizar.
 
-Te doy los datos ya extraídos (JSON) de los estados de cuenta del mes actual y, si existen, del mes anterior (para comparar y darle seguimiento a cosas que ya habías visto antes). También te puedo dar un historial resumido de hasta 6 meses anteriores (los insights que ya se generaron esos meses) para que detectes patrones a lo largo del tiempo.
+Te doy los datos ya extraídos (JSON, con TODAS las transacciones línea por línea) de los estados de cuenta del mes actual y, si existen, del mes anterior (para comparar y darle seguimiento a cosas que ya habías visto antes). También te puedo dar un historial resumido de hasta 6 meses anteriores (los insights que ya se generaron esos meses) para que detectes patrones a lo largo del tiempo.
+
+IMPORTANTE: antes de escribir tu respuesta, tú mismo agrupa mentalmente las transacciones de tipo "regular" por comercio/categoría (restaurantes, ropa, transporte, entretenimiento, viajes, tech/suscripciones, etc.) y súmalas — no te quedes solo con el resumen del statement (saldo, intereses). El usuario quiere ver patrones de gasto reales, con nombres de comercios y montos, igual que si alguien hubiera leído cada línea a mano. Ejemplo del nivel de detalle esperado: "Restaurantes: el gasto más grande del mes, otra vez — Maria Xoconostle $4,450.50, El Argentino $3,812.25, Presto Molina (4 visitas) $4,510, Wingstop $2,113.70, Toks (4 sucursales) $3,907.80, ronda los $30,000 este mes, el mismo patrón que meses anteriores."
 
 Tu respuesta tiene DOS partes:
 
@@ -44,13 +46,15 @@ Tu respuesta tiene DOS partes:
 - "El pago de $15,035 (iShopmixup) ya se resolvió — se cobró completo, una sola vez. No se te cobró dos veces."
 Prioriza en este orden: intereses/comisiones generados y por qué, algo que se resolvió o mejoró vs. el mes anterior, un patrón o riesgo a vigilar. Cada item lleva "tone": "good" (buena noticia o algo resuelto), "bad" (te costó dinero), "warning" (alerta a vigilar).
 
-2) "recommendations": entre 2 y 4 recomendaciones basadas en el PATRÓN HISTÓRICO (no solo este mes) — mezcla de:
-- "strength": cosas que el usuario ha hecho bien de forma consistente a lo largo de varios meses (ej. "llevas 4 meses seguidos pagando el saldo completo de Explora antes de la fecha límite").
-- "action": cosas concretas que debería empezar a cambiar para sanar sus gastos, sustentadas en un patrón repetido (ej. "Joy ha generado intereses 3 de los últimos 4 meses — revisa si vale la pena bajar el gasto en esa tarjeta o cambiar la fecha de pago").
-No fuerces la misma cantidad de cada tipo — depende de lo que realmente encuentres en los datos. Si hay poco historial, da recomendaciones más generales pero basadas en lo que sí tengas, nunca inventadas.
+2) "recommendations": entre 5 y 7 recomendaciones, mezclando dos fuentes:
+   a) Patrones de ESTE MES a nivel categoría/comercio (lo que pediste arriba: restaurantes, ropa, transporte, viajes, suscripciones/domiciliaciones que valga la pena revisar, una compra grande fuera de lo normal, etc.) — esto normalmente será la mayoría de las recomendaciones.
+   b) Patrones del HISTÓRICO (varios meses) — mezcla de:
+      - "strength": cosas que el usuario ha hecho bien de forma consistente (ej. "llevas 4 meses seguidos pagando el saldo completo de Explora antes de la fecha límite").
+      - "action": cosas concretas que debería empezar a cambiar, sustentadas en un patrón repetido (ej. "Joy ha generado intereses 3 de los últimos 4 meses — revisa si vale la pena bajar el gasto en esa tarjeta o cambiar la fecha de pago").
+   No fuerces la misma cantidad de cada tipo ni de cada fuente — depende de lo que realmente encuentres en los datos. Cada recomendación lleva "type": "strength" (algo positivo/consistente) o "action" (algo a cambiar) — un gasto alto en una categoría sin resolver todavía es "action", un gasto que bajó o se mantuvo controlado es "strength". Si hay poco historial, da recomendaciones más generales pero basadas en lo que sí tengas, nunca inventadas.
 
-No inventes datos que no estén en el contexto que te doy. Responde SOLO con este JSON, nada de texto antes o después, ni fences de markdown:
-{"insights": [{"text": "...", "tone": "good"|"bad"|"warning"}, ...exactamente 3], "recommendations": [{"text": "...", "type": "strength"|"action"}, ...entre 2 y 4]}`;
+No inventes datos que no estén en el contexto que te doy — todo monto, comercio y fecha que menciones debe venir literal de los datos. Responde SOLO con este JSON, nada de texto antes o después, ni fences de markdown:
+{"insights": [{"text": "...", "tone": "good"|"bad"|"warning"}, ...exactamente 3], "recommendations": [{"text": "...", "type": "strength"|"action"}, ...entre 5 y 7]}`;
 
 function isInsightTone(value: unknown): value is InsightTone {
   return value === "good" || value === "bad" || value === "warning";
@@ -91,7 +95,7 @@ function parseRecommendationsField(raw: unknown): Recommendation[] {
     .filter(
       (item): item is Recommendation => item.text !== null && item.type !== null,
     )
-    .slice(0, 4);
+    .slice(0, 7);
 }
 
 function parseMonthlySummary(text: string): MonthlySummaryResult {

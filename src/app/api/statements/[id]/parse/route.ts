@@ -186,6 +186,7 @@ export async function POST(
     description: tx.description,
     amount: tx.amount,
     type: tx.type,
+    category: tx.category ?? null,
     msi_plan_id: tx.msi_ref
       ? (msiPlanIdByConcept[String(tx.msi_ref)] ?? null)
       : null,

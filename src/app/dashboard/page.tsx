@@ -17,12 +17,23 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <NavBar userEmail={user.email} />
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <div className="mb-6 flex items-baseline justify-between">
+        <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="text-xl font-bold">
             {data.monthLabel
               ? `Dashboard — ${data.monthLabel.slice(0, 7)}`
               : "Dashboard"}
           </h1>
+          {data.statusBadge && (
+            <span
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                data.statusBadge.tone === "bad"
+                  ? "border-red-700/40 bg-red-950/30 text-red-300"
+                  : "border-emerald-700/40 bg-emerald-950/30 text-emerald-300"
+              }`}
+            >
+              {data.statusBadge.text}
+            </span>
+          )}
         </div>
         <DashboardTabs data={data} />
       </main>

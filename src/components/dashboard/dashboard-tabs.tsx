@@ -56,10 +56,12 @@ function Panel({
 function Kpi({
   label,
   value,
+  sub,
   tone = "default",
 }: {
   label: string;
   value: string;
+  sub?: string;
   tone?: "default" | "good" | "bad" | "warn";
 }) {
   const toneColor = {
@@ -83,6 +85,7 @@ function Kpi({
         {label}
       </div>
       <div className={`mt-1.5 text-xl font-bold ${toneColor}`}>{value}</div>
+      {sub && <div className="mt-1 text-xs text-zinc-500">{sub}</div>}
     </div>
   );
 }
@@ -430,11 +433,30 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <Kpi label="Ingreso Total" value={money(data.ingresoTotal)} tone="good" />
-        <Kpi label="Egreso Total" value={money(data.egresoTotal)} tone="bad" />
+        <Kpi
+          label="Ingreso Total"
+          value={money(data.ingresoTotal)}
+          sub={
+            data.incomes.length > 0
+              ? data.incomes.map((i) => i.concept).join(", ")
+              : "Sin ingresos capturados este mes"
+          }
+          tone="good"
+        />
+        <Kpi
+          label="Egreso Total"
+          value={money(data.egresoTotal)}
+          sub={`Tarjetas (${money(data.gastoTarjetas)}) + costos fijos (${money(data.egresoDebito)})`}
+          tone="bad"
+        />
         <Kpi
           label="Balance del Mes"
           value={money(data.balance)}
+          sub={
+            data.balance >= 0
+              ? "Tus ingresos cubrieron tus egresos este mes"
+              : "Tus egresos superaron tus ingresos — revisa liquidez"
+          }
           tone={data.balance >= 0 ? "good" : "bad"}
         />
       </div>
@@ -453,6 +475,7 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
                 <th className="pb-2 pr-4">Utilización</th>
                 <th className="pb-2 pr-4">Deuda MSI</th>
                 <th className="pb-2 pr-4">Fecha Pago</th>
+                <th className="pb-2 pr-4">Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -481,6 +504,28 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
                   <td className="py-2 pr-4 text-zinc-400">
                     {c.fechaPago ?? "—"}
                   </td>
+                  <td className="py-2 pr-4">
+                    <div className="flex flex-wrap gap-1">
+                      {c.estadoTags.length === 0 ? (
+                        <span className="text-zinc-600">—</span>
+                      ) : (
+                        c.estadoTags.map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              tag.startsWith("✅")
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : tag.startsWith("🚨")
+                                  ? "bg-red-500/10 text-red-400"
+                                  : "bg-amber-500/10 text-amber-400"
+                            }`}
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -498,9 +543,52 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+function CategorizeTransactionsPanel({ count }: { count: number }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const categorize = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/transactions/categorize", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Panel title="Categorización de gastos">
+      <p className="text-sm text-zinc-400">
+        Tienes {count} movimiento{count === 1 ? "" : "s"} sin categoría
+        (comida, transporte, ropa...) — probablemente de statements que se
+        parsearon antes de tener esta función. No hace falta resubir el PDF.
+      </p>
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      <button
+        onClick={categorize}
+        disabled={loading}
+        className="mt-3 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+      >
+        {loading ? "Categorizando…" : "Categorizar movimientos"}
+      </button>
+    </Panel>
+  );
+}
+
 function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {data.uncategorizedCount > 0 && (
+        <CategorizeTransactionsPanel count={data.uncategorizedCount} />
+      )}
+
       <Panel title="Desglose de Ingresos">
         {data.incomes.length === 0 ? (
           <p className="text-sm text-zinc-500">

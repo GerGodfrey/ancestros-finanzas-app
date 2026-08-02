@@ -37,7 +37,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["tx_date", "description", "amount", "type"],
+        "required": ["tx_date", "description", "amount", "type", "category"],
         "properties": {
           "tx_date": { "type": "string", "format": "date" },
           "description": { "type": "string" },
@@ -45,6 +45,11 @@
           "type": {
             "type": "string",
             "enum": ["regular", "msi", "interest", "fee", "payment"]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["comida", "ropa", "transporte", "hogar", "entretenimiento", "tech", "viaje", "salud", "intereses_comisiones", "otros"],
+            "description": "Categoría de gasto (ver guía de categorización en SKILL.md). Para type='interest'/'fee' siempre usa 'intereses_comisiones'. Para type='payment' (abonos) usa 'otros'."
           },
           "msi_ref": {
             "type": ["string", "null"],
