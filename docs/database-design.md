@@ -120,9 +120,15 @@ como plan activo, se actualiza `installments_paid`; si no, se crea.
 | `status` | text | `active` \| `finished` |
 
 ### `recurring_charges` — domiciliaciones
-Pensada para detección automática de cargos recurrentes (Spotify, seguros,
-etc.) comparando descripciones repetidas entre statements. **Existe en el
-esquema pero todavía no hay proceso que la llene** — es trabajo de Fase 5.
+Detección automática (`src/lib/recurring-charges.ts`, sin IA — es
+determinístico) que corre al terminar de parsear un statement: si la
+descripción normalizada de un cargo (`type` `regular` o `fee`) aparece en 2
+de los últimos 3 statements parseados de esa cuenta, se marca como
+domiciliación activa (`typical_amount` = promedio, `first_seen`/`last_seen`
+de las fechas encontradas). Si una domiciliación activa no aparece en el
+statement recién parseado, se marca `active = false` (se asume cancelada o
+pagada por otro medio). Coincidencia por texto exacto normalizado — no hay
+fuzzy matching, así que un cambio de descripción entre meses no se detecta.
 
 ### `incomes` — tus ingresos (captura manual)
 Los PDFs de tarjeta nunca traen tu nómina ni transferencias que recibes —

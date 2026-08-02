@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
 import { parseStatementPdf } from "@/lib/ai/parse-statement";
 import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
+import { detectRecurringCharges } from "@/lib/recurring-charges";
 import type { Provider } from "@/lib/ai/gateway";
 
 export async function POST(
@@ -201,7 +202,22 @@ export async function POST(
     }
   }
 
-  // 4) Regenera los insights + recomendaciones del mes ("3 cosas que
+  // 4) Detecta domiciliaciones (compara descripciones repetidas entre los
+  // últimos statements de esta cuenta) — determinístico, sin IA, no bloquea
+  // la respuesta si falla.
+  try {
+    await detectRecurringCharges({
+      supabase,
+      userId: user.id,
+      accountId: statement.account_id,
+      statementId: id,
+    });
+  } catch {
+    // No es crítico para el flujo de parseo — se puede reintentar en el
+    // próximo statement de esta cuenta.
+  }
+
+  // 5) Regenera los insights + recomendaciones del mes ("3 cosas que
   // pasaron este mes" y "Recomendaciones y Próximos Pasos") con los datos
   // ya guardados — no bloquea la respuesta si falla, ya que el parseo en sí
   // ya terminó bien.

@@ -778,6 +778,52 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
         )}
       </Panel>
 
+      <Panel title="Domiciliaciones Activas">
+        {data.recurringCharges.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Todavía no se detectan domiciliaciones — hacen falta al menos 2
+            statements de una misma tarjeta con el mismo cargo repetido.
+          </p>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                  <th className="pb-2 pr-4">Servicio</th>
+                  <th className="pb-2 pr-4">Tarjeta</th>
+                  <th className="pb-2 pr-4">Monto Típico</th>
+                  <th className="pb-2 pr-4">Última vez</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recurringCharges.map((r) => (
+                  <tr key={r.id} className="border-b border-zinc-800/60">
+                    <td className="py-2 pr-4 text-zinc-200">{r.description}</td>
+                    <td className="py-2 pr-4 text-zinc-400">{r.accountLabel}</td>
+                    <td className="py-2 pr-4 font-medium text-zinc-100">
+                      {money(r.typicalAmount)}
+                    </td>
+                    <td className="py-2 pr-4 text-zinc-400">{r.lastSeen ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-3 rounded-md border-l-4 border-l-blue-500 border-y border-r border-zinc-800 bg-zinc-950/60 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+                Total — {data.recurringCharges.length} domiciliaciones
+              </div>
+              <div className="mt-1 text-lg font-bold text-blue-400">
+                {money(data.recurringCharges.reduce((sum, r) => sum + r.typicalAmount, 0))}
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Ya está incluido dentro del gasto de cada tarjeta — esto es
+                solo para que veas qué parte es recurrente.
+              </p>
+            </div>
+          </>
+        )}
+      </Panel>
+
       <Panel title="Cuánto puedes gastar el próximo mes (máximo, según ingreso)">
         <div className="text-2xl font-bold text-emerald-400">
           {money(data.saldoDisponibleGastoLibre)}

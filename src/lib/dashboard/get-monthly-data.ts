@@ -63,6 +63,14 @@ export interface CategoryBreakdownEntry {
   amount: number;
 }
 
+export interface RecurringChargeSummary {
+  id: string;
+  description: string;
+  accountLabel: string;
+  typicalAmount: number;
+  lastSeen: string | null;
+}
+
 export interface StatusBadge {
   text: string;
   tone: "good" | "bad" | "warning";
@@ -83,6 +91,7 @@ export interface MonthlyDashboardData {
   incomes: { concept: string; amount: number }[];
   fixedCosts: { concept: string; amount: number }[];
   msiPlans: MsiPlanSummary[];
+  recurringCharges: RecurringChargeSummary[];
   relevantTransactionsByAccount: {
     accountId: string;
     accountLabel: string;
@@ -113,6 +122,7 @@ const EMPTY_DATA: MonthlyDashboardData = {
   incomes: [],
   fixedCosts: [],
   msiPlans: [],
+  recurringCharges: [],
   relevantTransactionsByAccount: [],
   categoryBreakdown: [],
   uncategorizedCount: 0,
@@ -230,6 +240,7 @@ export async function getMonthlyDashboardData(
     { data: msiPlansRaw },
     { data: monthlySummary },
     { data: standingDebtsRaw },
+    { data: recurringChargesRaw },
   ] = await Promise.all([
     supabase
       .from("incomes")
@@ -259,6 +270,12 @@ export async function getMonthlyDashboardData(
       .select("id, concept, amount, note")
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("recurring_charges")
+      .select("id, account_id, description, typical_amount, last_seen")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .order("typical_amount", { ascending: false }),
   ]);
 
   const statementIds = statementsInMonth.map((s) => s.id);
@@ -458,6 +475,17 @@ export async function getMonthlyDashboardData(
     totalInstallments: p.total_installments,
   }));
 
+  // --- Domiciliaciones activas (detectadas automáticamente al parsear) ---
+  const recurringCharges: RecurringChargeSummary[] = (recurringChargesRaw ?? []).map(
+    (r) => ({
+      id: r.id,
+      description: r.description,
+      accountLabel: accountLabel(r.account_id as string),
+      typicalAmount: Number(r.typical_amount ?? 0),
+      lastSeen: r.last_seen,
+    }),
+  );
+
   // --- Validación: avisos del Skill + checks de consistencia ---
   const validationIssues: ValidationIssue[] = [];
   for (const s of statementsInMonth) {
@@ -509,6 +537,7 @@ export async function getMonthlyDashboardData(
       amount: Number(f.amount),
     })),
     msiPlans,
+    recurringCharges,
     relevantTransactionsByAccount,
     categoryBreakdown,
     uncategorizedCount,
