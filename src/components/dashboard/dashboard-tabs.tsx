@@ -24,6 +24,17 @@ const money = (n: number | null | undefined) =>
 const pct = (n: number | null | undefined) =>
   n === null || n === undefined ? "—" : `${(n * 100).toFixed(1)}%`;
 
+const MESES_CORTOS = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+
+const formatShortDate = (dateStr: string | null) => {
+  if (!dateStr) return "—";
+  const d = new Date(`${dateStr}T00:00:00`);
+  return `${String(d.getDate()).padStart(2, "0")} ${MESES_CORTOS[d.getMonth()]}`;
+};
+
 function Panel({
   title,
   children,
@@ -189,6 +200,157 @@ function MonthlyInsightsPanel({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+function ProximosPagosPanel({ data }: { data: MonthlyDashboardData }) {
+  const pagos = data.cards
+    .filter((c) => c.fechaPago && c.gasto)
+    .slice()
+    .sort((a, b) => (a.fechaPago ?? "").localeCompare(b.fechaPago ?? ""));
+
+  const total = pagos.reduce((sum, c) => sum + (c.gasto ?? 0), 0);
+  const diff =
+    data.previousMonthCardsTotal !== null
+      ? total - data.previousMonthCardsTotal
+      : null;
+
+  return (
+    <Panel title="Próximos Pagos">
+      {pagos.length === 0 ? (
+        <p className="text-sm text-zinc-500">No hay pagos pendientes.</p>
+      ) : (
+        <ul className="flex flex-col gap-2 text-sm">
+          {pagos.map((c) => (
+            <li
+              key={c.accountId}
+              className="flex items-center justify-between gap-3 rounded-md border border-zinc-800 border-l-4 border-l-violet-500 bg-zinc-950/40 px-3 py-2"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-violet-300">
+                  {formatShortDate(c.fechaPago)}
+                </span>
+                <span className="text-zinc-200">
+                  {c.issuer} {c.productName}
+                </span>
+              </div>
+              <span className="font-medium text-zinc-100">{money(c.gasto)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {pagos.length > 0 && (
+        <div className="mt-4 rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+            Total a pagar (para no generar intereses)
+          </div>
+          <div className="mt-1 text-xl font-bold text-red-400">
+            {money(total)}
+          </div>
+          {diff !== null && (
+            <p className="mt-1 text-xs text-zinc-500">
+              {diff >= 0
+                ? `Es ${money(diff)} más que el mes pasado (${money(data.previousMonthCardsTotal)}) — revisa liquidez con cuidado.`
+                : `Es ${money(Math.abs(diff))} menos que el mes pasado (${money(data.previousMonthCardsTotal)}).`}
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function PanoramaDeDeudasPanel({ data }: { data: MonthlyDashboardData }) {
+  const router = useRouter();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const totalMsiDebt = data.msiDebts.reduce((sum, d) => sum + d.remainingDebt, 0);
+  const totalStandingDebt = data.standingDebts.reduce((sum, d) => sum + d.amount, 0);
+
+  const deleteDebt = async (id: string) => {
+    setDeletingId(id);
+    await fetch(`/api/debts?id=${id}`, { method: "DELETE" });
+    setDeletingId(null);
+    router.refresh();
+  };
+
+  return (
+    <Panel title="Panorama de Deudas">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {data.msiDebts.map((d) => (
+          <div
+            key={d.accountId}
+            className="rounded-md border border-zinc-800 bg-zinc-950/40 p-3"
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              {d.accountLabel} (MSI)
+            </div>
+            <div
+              className={`mt-1 text-base font-bold ${d.remainingDebt > 0 ? "text-red-400" : "text-emerald-400"}`}
+            >
+              {money(d.remainingDebt)}
+              {d.remainingDebt === 0 && " ✅"}
+            </div>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              {d.concepts.length > 0
+                ? d.concepts.join(", ")
+                : "Sin MSI, al corriente"}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        Deudas Familiares / Largo Plazo
+      </div>
+      {data.standingDebts.length === 0 ? (
+        <p className="mt-2 text-sm text-zinc-500">
+          No has capturado deudas de largo plazo. Agrégalas desde la pestaña
+          Desglose.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-2">
+          {data.standingDebts.map((d) => (
+            <li
+              key={d.id}
+              className="flex items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-950/40 p-3"
+            >
+              <div>
+                <div className="text-sm font-medium text-zinc-100">
+                  {d.concept}
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  {d.note ?? "No se paga este mes"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-red-400">{money(d.amount)}</span>
+                <button
+                  onClick={() => deleteDebt(d.id)}
+                  disabled={deletingId === d.id}
+                  className="text-xs text-zinc-600 hover:text-red-400 disabled:opacity-50"
+                  aria-label={`Eliminar ${d.concept}`}
+                >
+                  ✕
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(totalMsiDebt > 0 || totalStandingDebt > 0) && (
+        <div className="mt-5 rounded-md border-l-4 border-l-red-500 border-y border-r border-zinc-800 bg-zinc-950/60 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-zinc-500">
+            Deuda Futura Total (MSI tarjetas + familiar)
+          </div>
+          <div className="mt-1 text-lg font-bold text-red-400">
+            {money(totalMsiDebt)} tarjetas + {money(totalStandingDebt)} familiar
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function ResumenTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
@@ -250,6 +412,11 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
           </table>
         </div>
       </Panel>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ProximosPagosPanel data={data} />
+        <PanoramaDeDeudasPanel data={data} />
+      </div>
     </div>
   );
 }
@@ -307,7 +474,7 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         </ul>
       </Panel>
 
-      <Panel title="Agregar ingreso o costo fijo">
+      <Panel title="Agregar ingreso, costo fijo o deuda familiar/largo plazo">
         {data.monthLabel && <BudgetQuickAdd month={data.monthLabel} />}
       </Panel>
     </div>

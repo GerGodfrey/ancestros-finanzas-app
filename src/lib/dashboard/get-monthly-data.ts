@@ -39,6 +39,20 @@ export interface ValidationIssue {
   severity: "warning" | "error";
 }
 
+export interface MsiDebtSummary {
+  accountId: string;
+  accountLabel: string;
+  remainingDebt: number;
+  concepts: string[];
+}
+
+export interface StandingDebt {
+  id: string;
+  concept: string;
+  amount: number;
+  note: string | null;
+}
+
 export interface MonthlyDashboardData {
   hasData: boolean;
   monthLabel: string | null; // 'YYYY-MM-01'
@@ -56,6 +70,9 @@ export interface MonthlyDashboardData {
   relevantTransactions: RelevantTransaction[];
   validationIssues: ValidationIssue[];
   insights: MonthlyInsight[] | null;
+  previousMonthCardsTotal: number | null;
+  msiDebts: MsiDebtSummary[];
+  standingDebts: StandingDebt[];
 }
 
 const EMPTY_DATA: MonthlyDashboardData = {
@@ -75,6 +92,9 @@ const EMPTY_DATA: MonthlyDashboardData = {
   relevantTransactions: [],
   validationIssues: [],
   insights: null,
+  previousMonthCardsTotal: null,
+  msiDebts: [],
+  standingDebts: [],
 };
 
 function monthKey(dateStr: string): string {
@@ -128,6 +148,7 @@ export async function getMonthlyDashboardData(
     { data: fixedCosts },
     { data: msiPlansRaw },
     { data: monthlySummary },
+    { data: standingDebtsRaw },
   ] = await Promise.all([
     supabase
       .from("incomes")
@@ -152,6 +173,11 @@ export async function getMonthlyDashboardData(
       .eq("user_id", user.id)
       .eq("month", month)
       .maybeSingle(),
+    supabase
+      .from("debts")
+      .select("id, concept, amount, note")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true }),
   ]);
 
   const statementIds = statementsInMonth.map((s) => s.id);
@@ -198,6 +224,52 @@ export async function getMonthlyDashboardData(
       interesGenerado: Number(s.interest_charged ?? 0),
     };
   });
+
+  // --- Total del mes anterior (para comparar en "Próximos Pagos") ---
+  const [prevYear, prevM] = monthPrefix.split("-").map(Number);
+  const previousMonthPrefix = `${prevM === 1 ? prevYear - 1 : prevYear}-${String(prevM === 1 ? 12 : prevM - 1).padStart(2, "0")}`;
+  const previousMonthStatements = parsedStatements.filter(
+    (s) => s.period_end && monthKey(s.period_end as string) === previousMonthPrefix,
+  );
+  const previousMonthCardsTotal =
+    previousMonthStatements.length > 0
+      ? previousMonthStatements.reduce(
+          (sum, s) => sum + Number(s.payment_no_interest ?? 0),
+          0,
+        )
+      : null;
+
+  // --- Panorama de deudas: MSI restante por cuenta (todas las cuentas, no
+  // solo las que tuvieron statement este mes) ---
+  const msiDebts: MsiDebtSummary[] = accounts.map((account) => {
+    const plans = (msiPlansRaw ?? []).filter(
+      (p) => p.account_id === account.id,
+    );
+    const remainingDebt = plans.reduce(
+      (sum, p) =>
+        sum +
+        Number(p.monthly_payment ?? 0) *
+          Math.max(
+            0,
+            Number(p.total_installments ?? 0) -
+              Number(p.installments_paid ?? 0),
+          ),
+      0,
+    );
+    return {
+      accountId: account.id,
+      accountLabel: `${account.issuer} ${account.product_name}`,
+      remainingDebt,
+      concepts: plans.map((p) => p.concept),
+    };
+  });
+
+  const standingDebts: StandingDebt[] = (standingDebtsRaw ?? []).map((d) => ({
+    id: d.id,
+    concept: d.concept,
+    amount: Number(d.amount),
+    note: d.note,
+  }));
 
   const gastoTarjetas = cards.reduce((sum, c) => sum + (c.gasto ?? 0), 0);
   const ingresoTotal = (incomes ?? []).reduce(
@@ -289,5 +361,8 @@ export async function getMonthlyDashboardData(
     relevantTransactions,
     validationIssues,
     insights: (monthlySummary?.insights as MonthlyInsight[] | null) ?? null,
+    previousMonthCardsTotal,
+    msiDebts,
+    standingDebts,
   };
 }

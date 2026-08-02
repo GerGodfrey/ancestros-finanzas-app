@@ -3,9 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+const ENDPOINT_BY_KIND = {
+  income: "/api/incomes",
+  fixed: "/api/fixed-costs",
+  debt: "/api/debts",
+};
+
 export function BudgetQuickAdd({ month }: { month: string }) {
   const router = useRouter();
-  const [kind, setKind] = useState<"income" | "fixed">("income");
+  const [kind, setKind] = useState<"income" | "fixed" | "debt">("income");
   const [concept, setConcept] = useState("");
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
@@ -15,11 +21,17 @@ export function BudgetQuickAdd({ month }: { month: string }) {
     if (!concept.trim() || !amount) return;
     setSaving(true);
 
-    const endpoint = kind === "income" ? "/api/incomes" : "/api/fixed-costs";
-    await fetch(endpoint, {
+    // Las deudas familiares/largo plazo (kind="debt") no llevan mes — son un
+    // saldo pendiente, no un movimiento recurrente de este mes en particular.
+    const body =
+      kind === "debt"
+        ? { concept, amount: Number(amount) }
+        : { concept, amount: Number(amount), month };
+
+    await fetch(ENDPOINT_BY_KIND[kind], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ concept, amount: Number(amount), month }),
+      body: JSON.stringify(body),
     });
 
     setSaving(false);
@@ -37,11 +49,12 @@ export function BudgetQuickAdd({ month }: { month: string }) {
         <label className="text-xs text-zinc-400">Tipo</label>
         <select
           value={kind}
-          onChange={(e) => setKind(e.target.value as "income" | "fixed")}
+          onChange={(e) => setKind(e.target.value as "income" | "fixed" | "debt")}
           className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
         >
           <option value="income">Ingreso</option>
           <option value="fixed">Costo fijo</option>
+          <option value="debt">Deuda familiar/largo plazo</option>
         </select>
       </div>
       <div className="flex flex-1 flex-col gap-1">
@@ -49,7 +62,9 @@ export function BudgetQuickAdd({ month }: { month: string }) {
         <input
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
-          placeholder={kind === "income" ? "Nómina" : "Renta"}
+          placeholder={
+            kind === "income" ? "Nómina" : kind === "fixed" ? "Renta" : "Cripto (prestado)"
+          }
           className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
         />
       </div>

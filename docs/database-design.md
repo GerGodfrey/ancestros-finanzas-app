@@ -37,6 +37,7 @@ erDiagram
   ACCOUNTS ||--o{ RECURRING_CHARGES : "domiciliaciones detectadas"
   AUTH_USERS ||--o{ INCOMES : "ingresos capturados a mano"
   AUTH_USERS ||--o{ FIXED_COSTS : "costos fijos capturados a mano"
+  AUTH_USERS ||--o{ DEBTS : "deudas familiares/largo plazo capturadas a mano"
   AUTH_USERS ||--o{ MONTHLY_SUMMARIES : "rollup cacheado por mes"
   AUTH_USERS ||--o{ CHAT_MESSAGES : "historial del chatbot"
   AUTH_USERS ||--o{ PROVIDER_CREDENTIALS : "API keys de IA (cifradas)"
@@ -139,6 +140,23 @@ Configuración/Desglose del dashboard.
 ### `fixed_costs` — costos fijos (captura manual)
 Igual que `incomes` pero para gasto fijo recurrente que no pasa por
 tarjeta (renta, servicios, etc.). Mismo shape que `incomes`.
+
+### `debts` — deudas familiares/largo plazo (captura manual)
+Préstamos de cripto, dinero prestado a/por familiares, etc. — **no** tiene
+columna `month` a propósito: a diferencia de `fixed_costs`, no es un gasto
+recurrente de este mes, es un saldo pendiente que normalmente no se paga
+este mes. Por eso **no** se resta del balance mensual — solo se muestra
+como referencia en el panel "Panorama de Deudas" del dashboard, junto con
+la deuda de MSI restante de las tarjetas (`msi_plans`, calculada como
+`monthly_payment × (total_installments − installments_paid)` por cuenta).
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `id` | uuid (PK) | |
+| `user_id` | uuid (FK) | |
+| `concept` | text | "Cripto (Prestado)", "Estela (Familiar)", etc. |
+| `amount` | numeric | |
+| `note` | text | opcional, ej. "No se paga este mes" |
 
 ### `monthly_summaries` — insights narrativos del mes
 Por ahora solo se usa la columna `insights` (jsonb): un array de exactamente
