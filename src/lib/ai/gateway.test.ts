@@ -67,6 +67,21 @@ describe("gateway: chat", () => {
     expect(anthropicCreateMock).toHaveBeenCalledTimes(1);
   });
 
+  it("normaliza finishReason='max_tokens' cuando Anthropic corta por stop_reason='max_tokens'", async () => {
+    anthropicCreateMock.mockResolvedValue({
+      stop_reason: "max_tokens",
+      content: [{ type: "text", text: '{ "incompleto":' }],
+    });
+
+    const result = await chat({
+      provider: "anthropic",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "hola" }],
+    });
+
+    expect(result.finishReason).toBe("max_tokens");
+  });
+
   it("llama al SDK de OpenAI y normaliza la respuesta de texto", async () => {
     openaiCreateMock.mockResolvedValue({
       choices: [{ message: { content: "hola desde gpt" } }],
@@ -81,6 +96,22 @@ describe("gateway: chat", () => {
     expect(result.text).toBe("hola desde gpt");
     expect(result.provider).toBe("openai");
     expect(openaiCreateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normaliza finishReason='max_tokens' cuando OpenAI corta por finish_reason='length'", async () => {
+    openaiCreateMock.mockResolvedValue({
+      choices: [
+        { message: { content: '{ "incompleto":' }, finish_reason: "length" },
+      ],
+    });
+
+    const result = await chat({
+      provider: "openai",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "hola" }],
+    });
+
+    expect(result.finishReason).toBe("max_tokens");
   });
 
   it("adjunta el PDF como bloque 'document' en el último mensaje de usuario para Anthropic", async () => {
@@ -131,6 +162,21 @@ describe("gateway: chat", () => {
     expect(result.text).toBe("hola desde gemini");
     expect(result.provider).toBe("gemini");
     expect(geminiGenerateContentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normaliza finishReason='max_tokens' cuando Gemini corta por finishReason='MAX_TOKENS'", async () => {
+    geminiGenerateContentMock.mockResolvedValue({
+      text: '{ "incompleto":',
+      candidates: [{ finishReason: "MAX_TOKENS" }],
+    });
+
+    const result = await chat({
+      provider: "gemini",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "hola" }],
+    });
+
+    expect(result.finishReason).toBe("max_tokens");
   });
 
   it("adjunta el PDF como inlineData en el último mensaje de usuario para Gemini", async () => {

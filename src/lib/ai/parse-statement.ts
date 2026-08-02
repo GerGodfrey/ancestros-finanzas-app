@@ -5,6 +5,22 @@ import { chat, type Provider } from "@/lib/ai/gateway";
 
 const SKILL_DIR = path.join(process.cwd(), "skills", "pdf-statement-parser");
 
+// Un estado de cuenta real puede traer 30-50+ movimientos, y la respuesta es
+// un JSON completo (cuenta + statement + transactions + msi_plans), así que
+// el default general del gateway (4096) no alcanza. Cada proveedor tiene su
+// propio tope real de tokens de salida — usar más de eso solo causa un error
+// de la API, así que el límite es por proveedor, no un solo número a ciegas:
+// - Anthropic/OpenAI: modelos recientes soportan bastante más que esto, pero
+//   16384 ya cubre statements largos con margen de sobra.
+// - Gemini: los modelos Flash actuales soportan hasta 64k-65536 de salida.
+// - DeepSeek: deepseek-chat tiene un tope duro de 8192 tokens de salida.
+const PARSE_MAX_TOKENS: Record<Provider, number> = {
+  anthropic: 16384,
+  openai: 16384,
+  gemini: 32768,
+  deepseek: 8192,
+};
+
 let cachedSkill: { instructions: string; schema: object } | null = null;
 
 function loadSkill() {
@@ -84,9 +100,15 @@ export async function parseStatementPdf(opts: {
     apiKey: opts.apiKey,
     system,
     messages: [{ role: "user", content: userContent }],
-    maxTokens: 8192,
+    maxTokens: PARSE_MAX_TOKENS[opts.provider],
     pdfBase64,
   });
+
+  if (result.finishReason === "max_tokens") {
+    throw new Error(
+      `La respuesta del modelo se cortó por alcanzar el límite de tokens de salida (${PARSE_MAX_TOKENS[opts.provider]}) — el estado de cuenta tiene demasiados movimientos para que este proveedor lo devuelva completo en una sola respuesta. Prueba con otro proveedor (Anthropic o Gemini soportan más tokens de salida) o divide el PDF.`,
+    );
+  }
 
   const json = extractJson(result.text) as ParsedStatement;
   const validate = getValidator(schema);
@@ -109,8 +131,10 @@ function extractJson(text: string): unknown {
   try {
     return JSON.parse(jsonText);
   } catch {
-    throw new Error(
-      `El modelo no devolvió JSON válido. Respuesta cruda: ${text.slice(0, 500)}`,
-    );
+    const preview =
+      text.length > 1000
+        ? `${text.slice(0, 500)}\n...[${text.length - 1000} caracteres omitidos]...\n${text.slice(-500)}`
+        : text;
+    throw new Error(`El modelo no devolvió JSON válido. Respuesta cruda: ${preview}`);
   }
 }

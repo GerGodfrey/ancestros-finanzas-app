@@ -26,6 +26,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "https://example-test.supabase.co",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-anon-key",
       ENCRYPTION_KEY: "H0/tHg/89mQyZIZqNSpBpHpu3sDn/7MsC/cBmbaS880=",
+      NEXT_E2E: "1",
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

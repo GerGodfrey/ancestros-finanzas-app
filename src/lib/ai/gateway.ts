@@ -41,10 +41,23 @@ export interface GatewayChatOptions {
   pdfBase64?: string;
 }
 
+/**
+ * Motivo normalizado de por qué el modelo dejó de generar texto, unificado
+ * entre los 4 proveedores (cada uno usa su propio campo/enum):
+ * - Anthropic: `stop_reason` ("max_tokens" | "end_turn" | "stop_sequence" | ...)
+ * - OpenAI/DeepSeek: `choices[0].finish_reason` ("length" | "stop" | ...)
+ * - Gemini: `candidates[0].finishReason` ("MAX_TOKENS" | "STOP" | ...)
+ * Se usa para distinguir "el modelo terminó normal pero no devolvió JSON
+ * válido" de "la respuesta se cortó por el límite de tokens de salida" —
+ * son errores con causas y arreglos distintos.
+ */
+export type FinishReason = "stop" | "max_tokens" | "other";
+
 export interface GatewayChatResult {
   text: string;
   provider: Provider;
   model: string;
+  finishReason: FinishReason;
   raw: unknown;
 }
 
@@ -123,7 +136,23 @@ async function chatAnthropic(
     .map((block) => block.text)
     .join("\n");
 
-  return { text, provider: "anthropic", model: opts.model, raw: response };
+  return {
+    text,
+    provider: "anthropic",
+    model: opts.model,
+    finishReason: toFinishReasonAnthropic(response.stop_reason),
+    raw: response,
+  };
+}
+
+function toFinishReasonAnthropic(
+  stopReason: Anthropic.StopReason | null,
+): FinishReason {
+  if (stopReason === "max_tokens") return "max_tokens";
+  if (stopReason === "end_turn" || stopReason === "stop_sequence") {
+    return "stop";
+  }
+  return "other";
 }
 
 async function chatOpenAICompatible(
@@ -148,7 +177,21 @@ async function chatOpenAICompatible(
 
   const text = response.choices[0]?.message?.content ?? "";
 
-  return { text, provider, model: opts.model, raw: response };
+  return {
+    text,
+    provider,
+    model: opts.model,
+    finishReason: toFinishReasonOpenAI(response.choices[0]?.finish_reason),
+    raw: response,
+  };
+}
+
+function toFinishReasonOpenAI(
+  finishReason: string | null | undefined,
+): FinishReason {
+  if (finishReason === "length") return "max_tokens";
+  if (finishReason === "stop") return "stop";
+  return "other";
 }
 
 function toGeminiRole(role: "user" | "assistant"): "user" | "model" {
@@ -188,8 +231,17 @@ async function chatGemini(
     text: response.text ?? "",
     provider: "gemini",
     model: opts.model,
+    finishReason: toFinishReasonGemini(
+      response.candidates?.[0]?.finishReason,
+    ),
     raw: response,
   };
+}
+
+function toFinishReasonGemini(finishReason: string | undefined): FinishReason {
+  if (finishReason === "MAX_TOKENS") return "max_tokens";
+  if (finishReason === "STOP") return "stop";
+  return "other";
 }
 
 // ---------------------------------------------------------------------------

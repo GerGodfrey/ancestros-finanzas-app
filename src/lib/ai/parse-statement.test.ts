@@ -148,6 +148,7 @@ describe("parseStatementPdf", () => {
       text: "Lo siento, no puedo procesar este PDF.",
       provider: "anthropic",
       model: "claude-sonnet-5",
+      finishReason: "stop",
       raw: {},
     });
 
@@ -158,5 +159,42 @@ describe("parseStatementPdf", () => {
         pdfBuffer: Buffer.from("fake-pdf-bytes"),
       }),
     ).rejects.toThrow(/JSON válido/);
+  });
+
+  it("lanza un error específico y accionable si la respuesta se corta por límite de tokens", async () => {
+    chatMock.mockResolvedValue({
+      text: '{ "account": { "issuer": "Banamex"',
+      provider: "gemini",
+      model: "gemini-3.6-flash",
+      finishReason: "max_tokens",
+      raw: {},
+    });
+
+    await expect(
+      parseStatementPdf({
+        provider: "gemini",
+        apiKey: "fake-key",
+        pdfBuffer: Buffer.from("fake-pdf-bytes"),
+      }),
+    ).rejects.toThrow(/límite de tokens de salida/);
+  });
+
+  it("usa el tope de tokens específico del proveedor al parsear", async () => {
+    chatMock.mockResolvedValue({
+      text: JSON.stringify(VALID_EXTRACTION),
+      provider: "gemini",
+      model: "gemini-3.6-flash",
+      finishReason: "stop",
+      raw: {},
+    });
+
+    await parseStatementPdf({
+      provider: "gemini",
+      apiKey: "fake-key",
+      pdfBuffer: Buffer.from("fake-pdf-bytes"),
+    });
+
+    const callArgs = chatMock.mock.calls[0][0];
+    expect(callArgs.maxTokens).toBe(32768);
   });
 });
