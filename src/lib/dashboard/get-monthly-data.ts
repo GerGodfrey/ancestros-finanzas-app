@@ -93,6 +93,9 @@ export interface MonthlyDashboardData {
   balance: number;
   msiMensualTotal: number;
   saldoDisponibleGastoLibre: number;
+  ingresoRecurrente: number;
+  egresoDebitoRecurrente: number;
+  domiciliacionesTotal: number;
   cards: CardSummary[];
   incomes: { id: string; concept: string; amount: number; isRecurring: boolean }[];
   fixedCosts: { id: string; concept: string; amount: number; isRecurring: boolean }[];
@@ -129,6 +132,9 @@ const EMPTY_DATA: MonthlyDashboardData = {
   balance: 0,
   msiMensualTotal: 0,
   saldoDisponibleGastoLibre: 0,
+  ingresoRecurrente: 0,
+  egresoDebitoRecurrente: 0,
+  domiciliacionesTotal: 0,
   cards: [],
   incomes: [],
   fixedCosts: [],
@@ -435,8 +441,26 @@ export async function getMonthlyDashboardData(
     (sum, p) => sum + Number(p.monthly_payment ?? 0),
     0,
   );
+
+  // --- Proyección a próximo mes: solo lo que sí va a repetirse ---
+  // ingresoTotal/egresoDebito de arriba son el balance REAL de este mes
+  // (incluyen ingresos/costos "temporales", que por definición no vuelven a
+  // aparecer). Para proyectar el próximo mes hay que usar solo la parte
+  // "fija" — si no, un ingreso de un solo mes (ej. un bono) infla
+  // artificialmente cuánto parece que puedes gastar el mes que sigue.
+  const ingresoRecurrente = (incomes ?? [])
+    .filter((i) => i.is_recurring)
+    .reduce((sum, i) => sum + Number(i.amount), 0);
+  const egresoDebitoRecurrente = (fixedCosts ?? [])
+    .filter((f) => f.is_recurring)
+    .reduce((sum, f) => sum + Number(f.amount), 0);
+  const domiciliacionesTotal = (recurringChargesRaw ?? []).reduce(
+    (sum, r) => sum + Number(r.typical_amount ?? 0),
+    0,
+  );
   const saldoDisponibleGastoLibre =
-    ingresoTotal - (egresoDebito + msiMensualTotal);
+    ingresoRecurrente -
+    (egresoDebitoRecurrente + msiMensualTotal + domiciliacionesTotal);
 
   // --- Movimientos relevantes: top 6 por tarjeta ---
   // Claves "accountId::DESCRIPCIÓN" de domiciliaciones activas — se usan
@@ -570,6 +594,9 @@ export async function getMonthlyDashboardData(
     balance,
     msiMensualTotal,
     saldoDisponibleGastoLibre,
+    ingresoRecurrente,
+    egresoDebitoRecurrente,
+    domiciliacionesTotal,
     cards,
     incomes: (incomes ?? []).map((i) => ({
       id: i.id,

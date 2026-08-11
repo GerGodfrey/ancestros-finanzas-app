@@ -1028,11 +1028,19 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
           📅 Lo que ya está comprometido el próximo mes
         </h2>
         <div className="text-3xl font-extrabold text-violet-300">
-          {money(data.msiMensualTotal + data.egresoDebito)}
+          {money(
+            data.msiMensualTotal + data.egresoDebitoRecurrente + data.domiciliacionesTotal,
+          )}
         </div>
         <p className="mt-1 text-xs text-zinc-400">
           = {money(data.msiMensualTotal)} en mensualidades MSI +{" "}
-          {money(data.egresoDebito)} en costos fijos
+          {money(data.egresoDebitoRecurrente)} en costos fijos recurrentes +{" "}
+          {money(data.domiciliacionesTotal)} en domiciliaciones
+        </p>
+        <p className="mt-1 text-[11px] text-zinc-500">
+          Solo cuenta lo que sí se repite — costos fijos marcados
+          &quot;Temporal&quot; este mes no entran aquí porque por definición no
+          vuelven a aparecer.
         </p>
       </div>
 
@@ -1118,9 +1126,15 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
           {money(data.saldoDisponibleGastoLibre)}
         </div>
         <p className="mt-2 text-xs text-zinc-500">
-          Ingreso ({money(data.ingresoTotal)}) − costos fijos (
-          {money(data.egresoDebito)}) − mensualidades MSI (
-          {money(data.msiMensualTotal)})
+          Ingreso recurrente ({money(data.ingresoRecurrente)}) − costos fijos
+          recurrentes ({money(data.egresoDebitoRecurrente)}) − mensualidades
+          MSI ({money(data.msiMensualTotal)}) − domiciliaciones (
+          {money(data.domiciliacionesTotal)})
+        </p>
+        <p className="mt-1 text-[11px] text-zinc-500">
+          Usa solo ingresos y costos marcados &quot;Fijo&quot; — uno
+          &quot;Temporal&quot; de este mes no cuenta porque no vas a volver a
+          tenerlo el próximo mes.
         </p>
       </Panel>
     </div>

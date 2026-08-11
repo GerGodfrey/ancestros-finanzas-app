@@ -130,6 +130,10 @@ de las fechas encontradas). Si una domiciliación activa no aparece en el
 statement recién parseado, se marca `active = false` (se asume cancelada o
 pagada por otro medio). Coincidencia por texto exacto normalizado — no hay
 fuzzy matching, así que un cambio de descripción entre meses no se detecta.
+La suma de `typical_amount` de las domiciliaciones activas
+(`domiciliacionesTotal` en `get-monthly-data.ts`) se resta también en "Cuánto
+puedes gastar el próximo mes" — son cargos a la tarjeta tan comprometidos
+como una mensualidad MSI, aunque no pasen por `msi_plans`.
 
 ### `incomes` — tus ingresos (captura manual)
 Los PDFs de tarjeta nunca traen tu nómina ni transferencias que recibes —
@@ -143,7 +147,7 @@ Desglose del dashboard.
 | `concept` | text | "Nómina", "Estela", etc. |
 | `amount` | numeric | |
 | `month` | date | primer día del mes al que aplica (o del mes en que empieza, si `is_recurring`) |
-| `is_recurring` | boolean | `false` = temporal, solo cuenta para `month`. `true` = "fijo": cuenta para `month` y todos los meses siguientes, indefinidamente, hasta que se borre la fila. `get-monthly-data.ts` arma esto con un filtro `month = mes actual OR (is_recurring AND month <= mes actual)` — nunca cuenta hacia atrás de su mes de creación |
+| `is_recurring` | boolean | `false` = temporal, solo cuenta para `month`. `true` = "fijo": cuenta para `month` y todos los meses siguientes, indefinidamente, hasta que se borre la fila. `get-monthly-data.ts` arma esto con un filtro `month = mes actual OR (is_recurring AND month <= mes actual)` — nunca cuenta hacia atrás de su mes de creación. Además de filtrar qué cuenta para el mes en curso, distingue qué proyectar al mes siguiente: la pestaña "Próximo Mes" (`ingresoRecurrente`/`egresoDebitoRecurrente`) solo suma las filas con `is_recurring = true` de este mes, porque un ingreso/costo "Temporal" por definición no vuelve a aparecer — incluirlo en la proyección inflaría o desinflaría el número artificialmente |
 
 ### `fixed_costs` — costos fijos (captura manual)
 Igual que `incomes` pero para gasto fijo recurrente que no pasa por
