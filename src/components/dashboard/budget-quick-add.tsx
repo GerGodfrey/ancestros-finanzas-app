@@ -54,8 +54,8 @@ export function BudgetQuickAdd({ month }: { month: string }) {
           onChange={(e) => setKind(e.target.value as "income" | "fixed" | "debt")}
           className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
         >
-          <option value="income">Ingreso</option>
-          <option value="fixed">Costo fijo</option>
+          <option value="income">Ingreso/Ganancia</option>
+          <option value="fixed">Egreso/Gasto</option>
           <option value="debt">Deuda familiar/largo plazo</option>
         </select>
       </div>
