@@ -564,14 +564,21 @@ function CategorizeTransactionsPanel({ count }: { count: number }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const categorize = async () => {
     setLoading(true);
     setError(null);
+    setWarning(null);
     try {
       const res = await fetch("/api/transactions/categorize", { method: "POST" });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      if (body.pending > 0) {
+        setWarning(
+          `Se categorizaron ${body.categorized} de ${body.categorized + body.pending} — quedaron ${body.pending} pendientes (dale de nuevo a "Categorizar movimientos" para reintentar solo esas).`,
+        );
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -588,6 +595,7 @@ function CategorizeTransactionsPanel({ count }: { count: number }) {
         parsearon antes de tener esta función. No hace falta resubir el PDF.
       </p>
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {warning && <p className="mt-2 text-xs text-amber-400">{warning}</p>}
       <button
         onClick={categorize}
         disabled={loading}

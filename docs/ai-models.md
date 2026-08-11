@@ -172,6 +172,16 @@ re-parsear. Recibe un array de `{id, description, amount, type}` y regresa
 `category` al parsear (§5.1) — esta función es solo el backfill de
 transacciones guardadas antes de que existiera esa columna poblada.
 
+El endpoint (`/api/transactions/categorize`) nunca manda todo el backfill
+pendiente en un solo call — `categorizeTransactionsInBatches` lo parte en
+lotes de 50 y llama a `categorizeTransactions` una vez por lote (mandar los
+300 posibles de golpe rebasaba fácilmente el `maxTokens` de salida,
+truncando la respuesta a mitad de JSON — bug real visto en producción,
+corregido). Si un lote falla, los demás igual se procesan; la respuesta
+incluye `categorized`, `pending` (lo que quedó sin categorizar) y `errors`,
+y el botón de la UI se puede volver a apretar para reintentar solo lo
+pendiente.
+
 ### 5.4 Chatbot (`runAgent` + `chatbot-tools.ts`)
 
 El único de los cuatro que usa **tool-calling** en vez de una respuesta de

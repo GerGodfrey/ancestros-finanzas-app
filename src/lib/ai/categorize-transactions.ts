@@ -61,6 +61,12 @@ export async function categorizeTransactions(opts: {
     maxTokens: CATEGORIZE_MAX_TOKENS[opts.provider],
   });
 
+  if (result.finishReason === "max_tokens") {
+    throw new Error(
+      `La respuesta se cortó por el límite de tokens de salida (${CATEGORIZE_MAX_TOKENS[opts.provider]}) — se mandaron demasiadas transacciones en un solo lote (${opts.transactions.length}). Esto debería resolverse solo dividiendo en lotes más chicos (ver categorizeTransactionsInBatches).`,
+    );
+  }
+
   const json = extractJson(result.text);
   if (!Array.isArray(json)) {
     throw new Error("El modelo no devolvió un array de categorías.");
@@ -75,4 +81,43 @@ export async function categorizeTransactions(opts: {
     }
   }
   return byId;
+}
+
+// Un lote grande de transacciones (el backfill puede tener decenas o cientos
+// pendientes) fácilmente rebasa el maxTokens de salida si se manda todo en
+// un solo call — ver CATEGORIZE_MAX_TOKENS arriba, en particular el tope
+// duro de 8192 de DeepSeek. Se parte en lotes chicos y se procesan uno por
+// uno; si un lote falla no se pierde el resto (se reporta en `errors`).
+const CHUNK_SIZE = 50;
+
+export interface CategorizeBatchResult {
+  categoryById: Map<string, TransactionCategory>;
+  errors: string[];
+}
+
+export async function categorizeTransactionsInBatches(opts: {
+  provider: Provider;
+  apiKey: string;
+  transactions: TransactionToCategorize[];
+}): Promise<CategorizeBatchResult> {
+  const categoryById = new Map<string, TransactionCategory>();
+  const errors: string[] = [];
+
+  for (let i = 0; i < opts.transactions.length; i += CHUNK_SIZE) {
+    const chunk = opts.transactions.slice(i, i + CHUNK_SIZE);
+    try {
+      const chunkResult = await categorizeTransactions({
+        provider: opts.provider,
+        apiKey: opts.apiKey,
+        transactions: chunk,
+      });
+      for (const [id, category] of chunkResult) {
+        categoryById.set(id, category);
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "error desconocido");
+    }
+  }
+
+  return { categoryById, errors };
 }

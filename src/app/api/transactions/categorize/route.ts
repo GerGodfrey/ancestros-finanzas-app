@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { decryptSecret } from "@/lib/crypto";
-import { categorizeTransactions } from "@/lib/ai/categorize-transactions";
+import { categorizeTransactionsInBatches } from "@/lib/ai/categorize-transactions";
 import type { Provider } from "@/lib/ai/gateway";
 
 // Backfill manual: categoriza las transacciones que ya existen en la BD y
@@ -50,30 +50,33 @@ export async function POST() {
     );
   }
 
-  try {
-    const categoryById = await categorizeTransactions({
-      provider: credential.provider as Provider,
-      apiKey: decryptSecret(credential.api_key_encrypted),
-      transactions: pending.map((t) => ({
-        id: t.id,
-        description: t.description,
-        amount: Number(t.amount),
-        type: t.type,
-      })),
-    });
+  const { categoryById, errors } = await categorizeTransactionsInBatches({
+    provider: credential.provider as Provider,
+    apiKey: decryptSecret(credential.api_key_encrypted),
+    transactions: pending.map((t) => ({
+      id: t.id,
+      description: t.description,
+      amount: Number(t.amount),
+      type: t.type,
+    })),
+  });
 
-    const updates = Array.from(categoryById.entries()).map(([id, category]) =>
-      supabase.from("transactions").update({ category }).eq("id", id).eq("user_id", user.id),
-    );
-    await Promise.all(updates);
+  const updates = Array.from(categoryById.entries()).map(([id, category]) =>
+    supabase.from("transactions").update({ category }).eq("id", id).eq("user_id", user.id),
+  );
+  await Promise.all(updates);
 
-    return NextResponse.json({ ok: true, categorized: categoryById.size });
-  } catch (err) {
+  if (categoryById.size === 0 && errors.length > 0) {
     return NextResponse.json(
-      {
-        error: `No se pudo categorizar: ${err instanceof Error ? err.message : "error desconocido"}`,
-      },
+      { error: `No se pudo categorizar: ${errors[0]}` },
       { status: 500 },
     );
   }
+
+  return NextResponse.json({
+    ok: true,
+    categorized: categoryById.size,
+    pending: pending.length - categoryById.size,
+    errors,
+  });
 }
