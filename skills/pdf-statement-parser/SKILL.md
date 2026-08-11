@@ -108,6 +108,41 @@ Layout más compacto, tarjeta departamental:
 - Si hay "Gastos de Cobranza" en Movimientos del Periodo, es una comisión
   por pago tardío — clasifícalo `type: fee`, no `type: regular`.
 
+## Limpieza de la `description`
+
+El PDF trae la descripción de cada movimiento en el formato crudo del banco
+(mayúsculas, prefijos de procesador de pagos, números de referencia,
+sucursal/folio que no le dicen nada al usuario). No la copies literal —
+reescríbela para que sea legible, conservando el comercio/concepto real.
+Esto aplica por igual sin importar qué modelo esté corriendo este Skill —
+la limpieza es una instrucción explícita, no algo que cada proveedor deba
+adivinar por su cuenta.
+
+Reglas:
+- Capitalización tipo título (Mayúscula Inicial), no todo en mayúsculas ni
+  todo en minúsculas.
+- Quita prefijos de procesador de pagos si el nombre real del comercio
+  viene después: `MERPAGO*`, `CLIP*`, `NETPAY*`, `SR*`, etc. — deja solo el
+  nombre del comercio.
+- Quita números de referencia/autorización/folio que no aportan nada
+  (secuencias largas de dígitos sueltas, "001 DE 001", códigos de sucursal
+  puramente numéricos) — pero conserva ubicación/sucursal si es parte
+  reconocible del nombre (ej. "Presto Molina Condesa" sí, "Presto Molina
+  #4471" no).
+- Nunca inventes ni completes información que no esté en el texto original
+  — la limpieza es de forma, no de contenido. Si al limpiar el texto queda
+  ambiguo (ej. solo un código sin nombre reconocible), déjalo tal cual mejor
+  que inventar un comercio.
+- Ejemplos reales (mismo criterio ya usado en `warnings`/`msi_plans` de este
+  Skill):
+  - `"ISHOPMIXUP OASIS COYOA 001 DE 001"` → `"iShopMixup Oasis Coyoacán"`
+  - `"MERPAGO*GARMIN DEL MAZ"` → `"Garmin del Maz"`
+  - `"0947 EL ANGEL 3"` → `"Cajero El Ángel 3"`
+  - `"WINGSTOP DEL VALLE"` → `"Wingstop del Valle"`
+  - `"NETPAY*EL DIEZ RESTAURA"` → `"El Diez Restaurante"` (solo si es
+    razonablemente claro; si es ambiguo, quita solo el prefijo:
+    `"El Diez Restaura"`)
+
 ## Clasificación de movimientos (`type`)
 
 - `regular`: compra normal de contado, no diferida a meses.

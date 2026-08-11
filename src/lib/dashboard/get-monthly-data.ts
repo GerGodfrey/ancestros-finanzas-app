@@ -442,7 +442,7 @@ export async function getMonthlyDashboardData(
   const relevantTransactionsByAccount = statementsInMonth
     .map((s) => {
       const txs = transactionsList
-        .filter((t) => t.account_id === s.account_id)
+        .filter((t) => t.account_id === s.account_id && t.type !== "payment")
         .slice()
         .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
         .slice(0, 6)
