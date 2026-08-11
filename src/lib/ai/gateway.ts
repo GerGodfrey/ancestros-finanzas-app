@@ -224,6 +224,14 @@ async function chatGemini(
     config: {
       systemInstruction: opts.system,
       maxOutputTokens: opts.maxTokens ?? 4096,
+      // Los modelos "thinking" de Gemini (3.x/2.5 flash) gastan parte de
+      // maxOutputTokens en razonamiento interno invisible antes de escribir
+      // la respuesta — con thinkingBudget sin acotar, ese consumo es
+      // impredecible y puede truncar la respuesta real aunque el JSON en sí
+      // sea corto (visto en producción: 50 items truncados con 8192
+      // tokens). Todo lo que pasa por este gateway pide JSON/texto
+      // estructurado, no necesita razonamiento visible — se desactiva.
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -461,6 +469,7 @@ async function runAgentGemini(
       config: {
         systemInstruction: opts.system,
         maxOutputTokens: opts.maxTokens ?? 4096,
+        thinkingConfig: { thinkingBudget: 0 },
         tools,
       },
     });

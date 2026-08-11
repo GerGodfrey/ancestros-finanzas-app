@@ -85,6 +85,20 @@ truncó la respuesta por el límite de tokens de salida" (mensaje específico y
 accionable) de "el modelo terminó normal pero no devolvió JSON válido"
 (error genérico) — son causas y arreglos distintos.
 
+### Gemini: `thinkingConfig: { thinkingBudget: 0 }`
+
+Los modelos "thinking" de Gemini (la línea 2.5/3.x, incluyendo
+`gemini-3.6-flash`) pueden gastar una parte de `maxOutputTokens` en
+razonamiento interno invisible *antes* de escribir la respuesta visible. Con
+el thinking budget sin acotar, ese consumo es impredecible — se vio en
+producción un lote de solo 50 transacciones truncarse con 8,192 tokens de
+salida disponibles, un tamaño que a simple vista debería sobrar. Como
+ninguna de las 4 funciones de §5 necesita razonamiento visible (todas piden
+JSON o texto estructurado, no una cadena de pensamiento), tanto `chatGemini`
+como `runAgentGemini` mandan `thinkingConfig: { thinkingBudget: 0 }` para
+desactivarlo por completo y que todo el presupuesto de tokens vaya a la
+respuesta real.
+
 ## 4. Dónde viven las credenciales y cómo se protegen
 
 - **Guardado**: `POST /api/providers` valida la key con `verifyApiKey()`
@@ -173,13 +187,19 @@ re-parsear. Recibe un array de `{id, description, amount, type}` y regresa
 transacciones guardadas antes de que existiera esa columna poblada.
 
 El endpoint (`/api/transactions/categorize`) nunca manda todo el backfill
-pendiente en un solo call — `categorizeTransactionsInBatches` lo parte en
+pendiente en un solo call — `categorizeTransactionsInBatches` empieza en
 lotes de 50 y llama a `categorizeTransactions` una vez por lote (mandar los
 300 posibles de golpe rebasaba fácilmente el `maxTokens` de salida,
 truncando la respuesta a mitad de JSON — bug real visto en producción,
-corregido). Si un lote falla, los demás igual se procesan; la respuesta
-incluye `categorized`, `pending` (lo que quedó sin categorizar) y `errors`,
-y el botón de la UI se puede volver a apretar para reintentar solo lo
+corregido dos veces: primero partiendo en lotes, y de raíz al descubrir que
+los modelos "thinking" de Gemini gastan parte de `maxOutputTokens` en
+razonamiento invisible — ver nota sobre `thinkingConfig` en §3). Si un lote
+de 50 igual se trunca (`MaxTokensTruncatedError`), se parte a la mitad y se
+reintenta cada mitad por separado, recursivamente, hasta lotes de 1 si hace
+falta — auto-ajustable en vez de un número fijo. Si algo sigue sin poder
+categorizarse, los demás lotes igual se procesan; la respuesta incluye
+`categorized`, `pending` (lo que quedó sin categorizar) y `errors`, y el
+botón de la UI se puede volver a apretar para reintentar solo lo
 pendiente.
 
 ### 5.4 Chatbot (`runAgent` + `chatbot-tools.ts`)

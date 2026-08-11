@@ -179,4 +179,48 @@ describe("categorizeTransactionsInBatches", () => {
     expect(categoryById.size).toBe(50); // segundo chunk sí se categorizó
     expect(errors).toHaveLength(1);
   });
+
+  it("si un chunk se trunca por max_tokens, lo parte a la mitad y reintenta cada mitad", async () => {
+    const transactions = Array.from({ length: 50 }, (_, i) => ({
+      id: `tx-${i}`,
+      description: "X",
+      amount: 1,
+      type: "regular",
+    }));
+
+    chatMock.mockImplementation(async (opts: { messages: { content: string }[] }) => {
+      const sent = JSON.parse(
+        opts.messages[0].content.split("Movimientos a categorizar:\n")[1].split("\n")[0],
+      ) as { id: string }[];
+      // Solo el lote completo de 50 se trunca — cualquier lote más chico
+      // (después de partirlo) sí cabe.
+      if (sent.length > 25) {
+        return {
+          text: '[{"id":"tx-0","cat',
+          provider: "gemini",
+          model: "gemini-3.6-flash",
+          finishReason: "max_tokens",
+          raw: {},
+        };
+      }
+      return {
+        text: JSON.stringify(sent.map((t) => ({ id: t.id, category: "comida" }))),
+        provider: "gemini",
+        model: "gemini-3.6-flash",
+        finishReason: "stop",
+        raw: {},
+      };
+    });
+
+    const { categoryById, errors } = await categorizeTransactionsInBatches({
+      provider: "gemini",
+      apiKey: "fake-key",
+      transactions,
+    });
+
+    expect(categoryById.size).toBe(50);
+    expect(errors).toEqual([]);
+    // 1 intento con 50 (falla) + 2 intentos con 25 (éxito) = 3 calls
+    expect(chatMock).toHaveBeenCalledTimes(3);
+  });
 });

@@ -42,6 +42,10 @@ export interface TransactionToCategorize {
   type: string;
 }
 
+// Distinguible de otros errores para que categorizeTransactionsInBatches
+// pueda reaccionar partiendo el lote a la mitad en vez de solo reportarlo.
+export class MaxTokensTruncatedError extends Error {}
+
 export async function categorizeTransactions(opts: {
   provider: Provider;
   apiKey: string;
@@ -62,8 +66,8 @@ export async function categorizeTransactions(opts: {
   });
 
   if (result.finishReason === "max_tokens") {
-    throw new Error(
-      `La respuesta se cortó por el límite de tokens de salida (${CATEGORIZE_MAX_TOKENS[opts.provider]}) — se mandaron demasiadas transacciones en un solo lote (${opts.transactions.length}). Esto debería resolverse solo dividiendo en lotes más chicos (ver categorizeTransactionsInBatches).`,
+    throw new MaxTokensTruncatedError(
+      `La respuesta se cortó por el límite de tokens de salida (${CATEGORIZE_MAX_TOKENS[opts.provider]}) con un lote de ${opts.transactions.length} transacciones.`,
     );
   }
 
@@ -86,13 +90,53 @@ export async function categorizeTransactions(opts: {
 // Un lote grande de transacciones (el backfill puede tener decenas o cientos
 // pendientes) fácilmente rebasa el maxTokens de salida si se manda todo en
 // un solo call — ver CATEGORIZE_MAX_TOKENS arriba, en particular el tope
-// duro de 8192 de DeepSeek. Se parte en lotes chicos y se procesan uno por
-// uno; si un lote falla no se pierde el resto (se reporta en `errors`).
-const CHUNK_SIZE = 50;
+// duro de 8192 de DeepSeek. Se empieza en lotes de este tamaño; si uno se
+// trunca igual (MaxTokensTruncatedError), se parte a la mitad y se
+// reintenta cada mitad por separado — auto-ajustable en vez de una sola
+// constante que puede volver a quedarse corta con descripciones largas o un
+// modelo más verboso de lo esperado.
+const INITIAL_CHUNK_SIZE = 50;
+const MIN_CHUNK_SIZE = 1;
 
 export interface CategorizeBatchResult {
   categoryById: Map<string, TransactionCategory>;
   errors: string[];
+}
+
+async function categorizeChunkWithRetry(opts: {
+  provider: Provider;
+  apiKey: string;
+  transactions: TransactionToCategorize[];
+  categoryById: Map<string, TransactionCategory>;
+  errors: string[];
+}): Promise<void> {
+  try {
+    const chunkResult = await categorizeTransactions({
+      provider: opts.provider,
+      apiKey: opts.apiKey,
+      transactions: opts.transactions,
+    });
+    for (const [id, category] of chunkResult) {
+      opts.categoryById.set(id, category);
+    }
+  } catch (err) {
+    if (
+      err instanceof MaxTokensTruncatedError &&
+      opts.transactions.length > MIN_CHUNK_SIZE
+    ) {
+      const mid = Math.ceil(opts.transactions.length / 2);
+      await categorizeChunkWithRetry({
+        ...opts,
+        transactions: opts.transactions.slice(0, mid),
+      });
+      await categorizeChunkWithRetry({
+        ...opts,
+        transactions: opts.transactions.slice(mid),
+      });
+      return;
+    }
+    opts.errors.push(err instanceof Error ? err.message : "error desconocido");
+  }
 }
 
 export async function categorizeTransactionsInBatches(opts: {
@@ -103,20 +147,15 @@ export async function categorizeTransactionsInBatches(opts: {
   const categoryById = new Map<string, TransactionCategory>();
   const errors: string[] = [];
 
-  for (let i = 0; i < opts.transactions.length; i += CHUNK_SIZE) {
-    const chunk = opts.transactions.slice(i, i + CHUNK_SIZE);
-    try {
-      const chunkResult = await categorizeTransactions({
-        provider: opts.provider,
-        apiKey: opts.apiKey,
-        transactions: chunk,
-      });
-      for (const [id, category] of chunkResult) {
-        categoryById.set(id, category);
-      }
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : "error desconocido");
-    }
+  for (let i = 0; i < opts.transactions.length; i += INITIAL_CHUNK_SIZE) {
+    const chunk = opts.transactions.slice(i, i + INITIAL_CHUNK_SIZE);
+    await categorizeChunkWithRetry({
+      provider: opts.provider,
+      apiKey: opts.apiKey,
+      transactions: chunk,
+      categoryById,
+      errors,
+    });
   }
 
   return { categoryById, errors };
