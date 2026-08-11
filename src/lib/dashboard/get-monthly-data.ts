@@ -28,6 +28,7 @@ export interface RelevantTransaction {
   amount: number;
   type: string;
   date: string;
+  category: TransactionCategory | null;
 }
 
 export interface MsiPlanSummary {
@@ -435,6 +436,7 @@ export async function getMonthlyDashboardData(
     amount: Number(t.amount),
     type: t.type,
     date: t.tx_date,
+    category: isTransactionCategory(t.category) ? t.category : null,
   });
 
   const relevantTransactionsByAccount = statementsInMonth

@@ -13,6 +13,7 @@ import {
   GastoPorTarjetaChart,
   IngresosVsEgresosManualesChart,
 } from "./charts";
+import { CATEGORY_COLOR, CATEGORY_LABEL } from "@/lib/transaction-categories";
 
 const TABS = [
   { id: "resumen", label: "📊 Resumen del Mes" },
@@ -736,6 +737,7 @@ function MovimientosPorTarjetaTable({
           <th className="pb-2 pr-4">Descripción</th>
           <th className="pb-2 pr-4">Monto</th>
           <th className="pb-2 pr-4">Tipo</th>
+          <th className="pb-2 pr-4">Categoría</th>
         </tr>
       </thead>
       <tbody>
@@ -752,6 +754,21 @@ function MovimientosPorTarjetaTable({
               <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
                 {t.type}
               </span>
+            </td>
+            <td className="py-2 pr-4">
+              {t.category ? (
+                <span
+                  className="rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    color: CATEGORY_COLOR[t.category],
+                    backgroundColor: `${CATEGORY_COLOR[t.category]}26`,
+                  }}
+                >
+                  {CATEGORY_LABEL[t.category]}
+                </span>
+              ) : (
+                <span className="text-xs text-zinc-600">—</span>
+              )}
             </td>
           </tr>
         ))}
