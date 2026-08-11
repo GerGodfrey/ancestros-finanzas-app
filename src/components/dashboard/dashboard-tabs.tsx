@@ -631,6 +631,54 @@ function CategorizeTransactionsPanel({ count }: { count: number }) {
   );
 }
 
+function CleanDescriptionsPanel({ count }: { count: number }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
+  const clean = async () => {
+    setLoading(true);
+    setError(null);
+    setWarning(null);
+    try {
+      const res = await fetch("/api/transactions/clean-descriptions", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      if (body.pending > 0) {
+        setWarning(
+          `Se limpiaron ${body.cleaned} de ${body.cleaned + body.pending} — quedaron ${body.pending} pendientes (dale de nuevo a "Limpiar descripciones" para reintentar solo esas).`,
+        );
+      }
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Panel title="Limpieza de descripciones">
+      <p className="text-sm text-zinc-400">
+        Tienes {count} movimiento{count === 1 ? "" : "s"} con la descripción
+        cruda del banco (mayúsculas, prefijos de procesador de pagos, folios
+        sin valor) — probablemente de statements que se parsearon antes de
+        que el Skill empezara a limpiarla. No hace falta resubir el PDF.
+      </p>
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+      {warning && <p className="mt-2 text-xs text-amber-400">{warning}</p>}
+      <button
+        onClick={clean}
+        disabled={loading}
+        className="mt-3 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+      >
+        {loading ? "Limpiando…" : "Limpiar descripciones"}
+      </button>
+    </Panel>
+  );
+}
+
 function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -780,6 +828,10 @@ function MovimientosPorTarjetaTable({
 function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-4">
+      {data.uncleanedDescriptionsCount > 0 && (
+        <CleanDescriptionsPanel count={data.uncleanedDescriptionsCount} />
+      )}
+
       <Panel title="Gasto por Categoría (estimado)">
         <GastoPorCategoriaChart data={data} />
       </Panel>

@@ -100,6 +100,7 @@ export interface MonthlyDashboardData {
   }[];
   categoryBreakdown: CategoryBreakdownEntry[];
   uncategorizedCount: number;
+  uncleanedDescriptionsCount: number;
   validationIssues: ValidationIssue[];
   insights: MonthlyInsight[] | null;
   recommendations: Recommendation[] | null;
@@ -127,6 +128,7 @@ const EMPTY_DATA: MonthlyDashboardData = {
   relevantTransactionsByAccount: [],
   categoryBreakdown: [],
   uncategorizedCount: 0,
+  uncleanedDescriptionsCount: 0,
   validationIssues: [],
   insights: null,
   recommendations: null,
@@ -290,7 +292,7 @@ export async function getMonthlyDashboardData(
     ? await supabase
         .from("transactions")
         .select(
-          "id, account_id, statement_id, tx_date, description, amount, type, category",
+          "id, account_id, statement_id, tx_date, description, amount, type, category, description_cleaned",
         )
         .eq("user_id", user.id)
         .in("statement_id", statementIds)
@@ -468,6 +470,10 @@ export async function getMonthlyDashboardData(
     const category = isTransactionCategory(t.category) ? t.category : "otros";
     categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + amount);
   }
+  const uncleanedDescriptionsCount = transactionsList.filter(
+    (t) => !t.description_cleaned,
+  ).length;
+
   const categoryBreakdown: CategoryBreakdownEntry[] = Array.from(
     categoryTotals.entries(),
   )
@@ -553,6 +559,7 @@ export async function getMonthlyDashboardData(
     relevantTransactionsByAccount,
     categoryBreakdown,
     uncategorizedCount,
+    uncleanedDescriptionsCount,
     validationIssues,
     insights: (monthlySummary?.insights as MonthlyInsight[] | null) ?? null,
     recommendations:

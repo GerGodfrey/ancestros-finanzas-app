@@ -188,6 +188,9 @@ export async function POST(
     amount: tx.amount,
     type: tx.type,
     category: tx.category ?? null,
+    // El Skill ya limpia la descripción al extraerla (ver "Limpieza de la
+    // description" en SKILL.md) — no necesita pasar por el backfill.
+    description_cleaned: true,
     msi_plan_id: tx.msi_ref
       ? (msiPlanIdByConcept[String(tx.msi_ref)] ?? null)
       : null,

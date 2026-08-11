@@ -125,13 +125,14 @@ hacés, confirmado en producción):
   funciones de IA de la app (§5) leen la credencial activa del usuario y
   usan ese proveedor — no hay selección por tarea.
 
-## 5. Cuándo se llama a un modelo (las 4 funciones de IA de la app)
+## 5. Cuándo se llama a un modelo (las 6 funciones de IA de la app)
 
 | Función | Archivo | Se dispara cuando | Usa | maxTokens |
 |---|---|---|---|---|
 | `parseStatementPdf` | `src/lib/ai/parse-statement.ts` | El usuario sube un PDF y le da "Procesar" (`POST /api/statements/[id]/parse`) | `chat()`, con `pdfBase64` si el proveedor lo soporta, si no con texto extraído por `pdf-parse` | 8,192–32,768 según proveedor (tabla abajo) |
 | `regenerateMonthlySummary` | `src/lib/ai/monthly-insights.ts` | Automático, al final de cada parseo exitoso (mismo request de arriba); también manual desde el botón "Regenerar análisis" (`POST /api/insights/generate`) | `chat()`, con el `raw_extraction` de los statements del mes actual + anterior + historial resumido de hasta 6 meses | 4,096–8,192 |
 | `categorizeTransactions` | `src/lib/ai/categorize-transactions.ts` | Manual, botón "Categorizar movimientos" en Desglose (`POST /api/transactions/categorize`) — solo si hay transacciones con `category IS NULL` | `chat()`, solo texto (descripción/monto/tipo, sin PDF) | 4,096–8,192 |
+| `cleanDescriptions` | `src/lib/ai/clean-descriptions.ts` | Manual, botón "Limpiar descripciones" en Movimientos Relevantes (`POST /api/transactions/clean-descriptions`) — solo si hay transacciones con `description_cleaned = false` | `chat()`, solo texto (id + descripción cruda, sin PDF) | 4,096–8,192 |
 | `runAgent` (chatbot) | `src/app/api/chat/route.ts` | Cada mensaje que el usuario manda en `/dashboard/chat` | `runAgent()`, con las 4 herramientas de `chatbot-tools.ts` y hasta 20 mensajes de historial como contexto | 4,096 (default del gateway, sin override) |
 | `verifyApiKey` | `src/lib/ai/gateway.ts` | Al guardar una API key nueva en Configuración | `chat()` mínimo (`"ping"`) | 8 |
 
@@ -210,9 +211,25 @@ categorizarse, los demás lotes igual se procesan; la respuesta incluye
 botón de la UI se puede volver a apretar para reintentar solo lo
 pendiente.
 
+### 5.3b Limpieza de descripciones (`cleanDescriptions`)
+
+Mismo patrón que categorización — texto solo, sin PDF, y
+`cleanDescriptionsInBatches` con el mismo esquema de lotes de 50 +
+partición recursiva por `MaxTokensTruncatedError`. El *system prompt* es
+una versión condensada de la sección "Limpieza de la description" de
+`SKILL.md` (mismas reglas: capitalización legible, quitar prefijos de
+procesador de pagos, quitar folios/referencias sin valor, nunca inventar).
+Recibe `{id, description}` cruda y regresa `{id, description}` limpia por
+cada transacción — no toca `amount`, `type` ni `category`.
+
+Existe porque el Skill solo limpia la descripción de PDFs que se parsean de
+ahora en adelante — las transacciones que ya estaban guardadas se quedan
+con el texto crudo del banco hasta que se corre este backfill una vez
+(`description_cleaned = false` marca cuáles faltan).
+
 ### 5.4 Chatbot (`runAgent` + `chatbot-tools.ts`)
 
-El único de los cuatro que usa **tool-calling** en vez de una respuesta de
+El único que usa **tool-calling** en vez de una respuesta de
 un solo tiro. El *system prompt* (`src/app/api/chat/route.ts`) instruye al
 modelo a usar las herramientas antes de responder y — desde el punto 1 del
 plan de mejoras de esta sesión — **rechaza explícitamente** cualquier

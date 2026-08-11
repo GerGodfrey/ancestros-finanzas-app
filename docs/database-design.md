@@ -98,11 +98,12 @@ chatbot consultan para casi todo.
 | `id` | uuid (PK) | |
 | `user_id`, `statement_id`, `account_id` | uuid (FK) | |
 | `tx_date` | date | |
-| `description` | text | |
+| `description` | text | Ya limpia (capitalización legible, sin prefijos de procesador de pagos ni folios) — ver `description_cleaned` |
 | `amount` | numeric | positivo = cargo, negativo = pago/abono |
 | `type` | text | `regular` \| `msi` \| `interest` \| `fee` \| `payment` |
 | `msi_plan_id` | uuid (FK, opcional) | si `type = 'msi'`, a qué plan pertenece |
 | `category` | text | `comida` \| `ropa` \| `transporte` \| `hogar` \| `entretenimiento` \| `tech` \| `viaje` \| `salud` \| `intereses_comisiones` \| `otros` (ver `src/lib/transaction-categories.ts`). La asigna el Skill al parsear cada PDF nuevo; para transacciones guardadas antes de esto existe un backfill manual (`/api/transactions/categorize`, botón "Categorizar movimientos" en Desglose) que la asigna sin re-leer el PDF |
+| `description_cleaned` | boolean | `true` si `description` ya pasó por limpieza (el Skill la deja lista desde el parseo). Para transacciones guardadas antes de esto (`false` por default), backfill manual (`/api/transactions/clean-descriptions`, botón "Limpiar descripciones" en Movimientos Relevantes) que reescribe la descripción sin re-leer el PDF |
 
 ### `msi_plans` — meses sin intereses activos
 Una fila por plan (no por mensualidad individual). Se actualiza cada vez
