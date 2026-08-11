@@ -197,7 +197,14 @@ export function GastoPorCategoriaChart({ data }: { data: MonthlyDashboardData })
           align="right"
           verticalAlign="middle"
           wrapperStyle={{ fontSize: 11, color: "#B0BAC9" }}
-          formatter={(value) => <span style={{ color: "#B0BAC9" }}>{value}</span>}
+          formatter={(value: string, entry: { payload?: { value?: number } }) => {
+            const amount = entry.payload?.value ?? 0;
+            return (
+              <span style={{ color: "#B0BAC9" }}>
+                {value} — <span style={{ color: "#F1F5F9", fontWeight: 600 }}>{money(amount)}</span>
+              </span>
+            );
+          }}
         />
       </PieChart>
     </ResponsiveContainer>
