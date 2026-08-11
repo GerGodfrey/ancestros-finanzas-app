@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   MonthlyDashboardData,
@@ -69,6 +69,48 @@ function DeleteRowButton({ endpoint, id }: { endpoint: string; id: string }) {
     >
       ✕
     </button>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
+          <button
+            onClick={onClose}
+            className="shrink-0 text-zinc-500 hover:text-zinc-200"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -918,6 +960,11 @@ function MovimientosPorTarjetaTable({
 }
 
 function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
+  const [openAccountId, setOpenAccountId] = useState<string | null>(null);
+  const openGroup = data.relevantTransactionsByAccount.find(
+    (g) => g.accountId === openAccountId,
+  );
+
   return (
     <div className="flex flex-col gap-4">
       {data.uncleanedDescriptionsCount > 0 && (
@@ -942,9 +989,26 @@ function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
               title={`Movimientos Relevantes — ${group.accountLabel}`}
             >
               <MovimientosPorTarjetaTable transactions={group.transactions} />
+              {group.allTransactions.length > group.transactions.length && (
+                <button
+                  onClick={() => setOpenAccountId(group.accountId)}
+                  className="mt-3 text-xs font-medium text-violet-400 hover:text-violet-300"
+                >
+                  Ver más ({group.allTransactions.length} operaciones en total) →
+                </button>
+              )}
             </Panel>
           ))}
         </div>
+      )}
+
+      {openGroup && (
+        <Modal
+          title={`Todas las operaciones — ${openGroup.accountLabel}`}
+          onClose={() => setOpenAccountId(null)}
+        >
+          <MovimientosPorTarjetaTable transactions={openGroup.allTransactions} />
+        </Modal>
       )}
     </div>
   );

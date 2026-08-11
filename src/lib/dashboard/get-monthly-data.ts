@@ -102,6 +102,10 @@ export interface MonthlyDashboardData {
     accountId: string;
     accountLabel: string;
     transactions: RelevantTransaction[];
+    // Todas las operaciones de la cuenta este mes (incluye pagos/abonos y
+    // MSI, sin el tope de 6 ni el filtro de `transactions` arriba) — para
+    // el pop-up "Ver más".
+    allTransactions: RelevantTransaction[];
   }[];
   categoryBreakdown: CategoryBreakdownEntry[];
   uncategorizedCount: number;
@@ -462,19 +466,25 @@ export async function getMonthlyDashboardData(
 
   const relevantTransactionsByAccount = statementsInMonth
     .map((s) => {
-      const txs = transactionsList
-        .filter((t) => t.account_id === s.account_id && t.type !== "payment")
+      const accountTxs = transactionsList.filter((t) => t.account_id === s.account_id);
+      const txs = accountTxs
+        .filter((t) => t.type !== "payment")
         .slice()
         .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))
         .slice(0, 6)
+        .map(toRelevant);
+      const allTxs = accountTxs
+        .slice()
+        .sort((a, b) => (a.tx_date < b.tx_date ? 1 : -1))
         .map(toRelevant);
       return {
         accountId: s.account_id,
         accountLabel: accountLabel(s.account_id),
         transactions: txs,
+        allTransactions: allTxs,
       };
     })
-    .filter((group) => group.transactions.length > 0);
+    .filter((group) => group.allTransactions.length > 0);
 
   // --- Gasto por categoría (excluye pagos/abonos, solo cargos positivos) ---
   const categoryTotals = new Map<TransactionCategory, number>();
