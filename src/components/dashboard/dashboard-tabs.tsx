@@ -13,7 +13,12 @@ import {
   GastoPorTarjetaChart,
   IngresosVsEgresosManualesChart,
 } from "./charts";
-import { CATEGORY_COLOR, CATEGORY_LABEL } from "@/lib/transaction-categories";
+import {
+  CATEGORY_COLOR,
+  CATEGORY_LABEL,
+  TRANSACTION_CATEGORIES,
+  type TransactionCategory,
+} from "@/lib/transaction-categories";
 
 const TABS = [
   { id: "resumen", label: "📊 Resumen del Mes" },
@@ -773,6 +778,122 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+function CategoryBadge({ category }: { category: TransactionCategory | null }) {
+  if (!category) return <span className="text-xs text-zinc-600">—</span>;
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{
+        color: CATEGORY_COLOR[category],
+        backgroundColor: `${CATEGORY_COLOR[category]}26`,
+      }}
+    >
+      {CATEGORY_LABEL[category]}
+    </span>
+  );
+}
+
+function EditableTransactionRow({ t }: { t: RelevantTransaction }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [description, setDescription] = useState(t.description);
+  const [category, setCategory] = useState<TransactionCategory | "">(t.category ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/transactions/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, category: category || undefined }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Error desconocido");
+      setEditing(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <tr className="border-b border-zinc-800/60 bg-zinc-950/40">
+        <td className="py-2 pr-4" colSpan={3}>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-w-[180px] flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as TransactionCategory | "")}
+              className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+            >
+              <option value="">Sin categoría</option>
+              {TRANSACTION_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABEL[c]}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-zinc-500">{money(t.amount)}</span>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : "Guardar"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setDescription(t.description);
+                setCategory(t.category ?? "");
+                setError(null);
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              Cancelar
+            </button>
+          </div>
+          {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-zinc-800/60">
+      <td className="py-2 pr-4 text-zinc-200">
+        {t.description}
+        <div className="text-[11px] text-zinc-500">{t.date}</div>
+      </td>
+      <td className="py-2 pr-4 font-medium text-zinc-100">{money(t.amount)}</td>
+      <td className="py-2 pr-4">
+        <div className="flex items-center gap-2">
+          <CategoryBadge category={t.category} />
+          {t.isEditable && (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-zinc-600 hover:text-violet-400"
+              aria-label="Editar"
+            >
+              ✎
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function MovimientosPorTarjetaTable({
   transactions,
 }: {
@@ -784,41 +905,12 @@ function MovimientosPorTarjetaTable({
         <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wide text-zinc-500">
           <th className="pb-2 pr-4">Descripción</th>
           <th className="pb-2 pr-4">Monto</th>
-          <th className="pb-2 pr-4">Tipo</th>
           <th className="pb-2 pr-4">Categoría</th>
         </tr>
       </thead>
       <tbody>
         {transactions.map((t) => (
-          <tr key={t.id} className="border-b border-zinc-800/60">
-            <td className="py-2 pr-4 text-zinc-200">
-              {t.description}
-              <div className="text-[11px] text-zinc-500">{t.date}</div>
-            </td>
-            <td className="py-2 pr-4 font-medium text-zinc-100">
-              {money(t.amount)}
-            </td>
-            <td className="py-2 pr-4">
-              <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                {t.type}
-              </span>
-            </td>
-            <td className="py-2 pr-4">
-              {t.category ? (
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    color: CATEGORY_COLOR[t.category],
-                    backgroundColor: `${CATEGORY_COLOR[t.category]}26`,
-                  }}
-                >
-                  {CATEGORY_LABEL[t.category]}
-                </span>
-              ) : (
-                <span className="text-xs text-zinc-600">—</span>
-              )}
-            </td>
-          </tr>
+          <EditableTransactionRow key={t.id} t={t} />
         ))}
       </tbody>
     </table>

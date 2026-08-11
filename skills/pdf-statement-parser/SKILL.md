@@ -133,6 +133,15 @@ Reglas:
   — la limpieza es de forma, no de contenido. Si al limpiar el texto queda
   ambiguo (ej. solo un código sin nombre reconocible), déjalo tal cual mejor
   que inventar un comercio.
+- **No sobre-simplifiques a una frase genérica que pierda el comercio o
+  concepto real.** Quitar ruido (folios, prefijos) está bien; quitar el
+  nombre del comercio no. Ejemplo de error real a evitar: "MESES EN
+  AUTOMATICO NACIONAL APPLE.COM/BILL" → "Meses en Automático Nacional" es
+  **incorrecto** (perdiste qué se compró). Si tienes duda entre dejar el
+  texto un poco más largo/completo o arriesgarte a que quede genérico,
+  siempre prefiere dejarlo más completo: "Meses en Automático Nacional —
+  Apple.com/Bill" o simplemente "Apple.com/Bill" (el concepto solo, sin la
+  frase de mecanismo de cobro) son ambas mejores opciones.
 - Ejemplos reales (mismo criterio ya usado en `warnings`/`msi_plans` de este
   Skill):
   - `"ISHOPMIXUP OASIS COYOA 001 DE 001"` → `"iShopMixup Oasis Coyoacán"`

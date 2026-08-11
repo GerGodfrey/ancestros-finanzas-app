@@ -29,6 +29,11 @@ export interface RelevantTransaction {
   type: string;
   date: string;
   category: TransactionCategory | null;
+  // false para MSI (la mensualidad ya está descrita por msi_plans.concept)
+  // y para movimientos que coinciden con una domiciliación activa
+  // detectada (editar la descripción rompería el matching de texto exacto
+  // que usa detectRecurringCharges) — el usuario puede curar todo lo demás.
+  isEditable: boolean;
 }
 
 export interface MsiPlanSummary {
@@ -430,6 +435,15 @@ export async function getMonthlyDashboardData(
     ingresoTotal - (egresoDebito + msiMensualTotal);
 
   // --- Movimientos relevantes: top 6 por tarjeta ---
+  // Claves "accountId::DESCRIPCIÓN" de domiciliaciones activas — se usan
+  // para bloquear la edición manual de descripción en esos movimientos (ver
+  // RelevantTransaction.isEditable).
+  const recurringDescriptionKeys = new Set(
+    (recurringChargesRaw ?? []).map(
+      (r) => `${r.account_id}::${String(r.description).trim().toUpperCase()}`,
+    ),
+  );
+
   const transactionsList = transactions ?? [];
   const toRelevant = (t: (typeof transactionsList)[number]): RelevantTransaction => ({
     id: t.id,
@@ -437,6 +451,11 @@ export async function getMonthlyDashboardData(
     description: t.description,
     amount: Number(t.amount),
     type: t.type,
+    isEditable:
+      t.type !== "msi" &&
+      !recurringDescriptionKeys.has(
+        `${t.account_id}::${t.description.trim().toUpperCase()}`,
+      ),
     date: t.tx_date,
     category: isTransactionCategory(t.category) ? t.category : null,
   });

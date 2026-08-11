@@ -21,6 +21,7 @@ Reglas:
 - Quita prefijos de procesador de pagos si el nombre real del comercio viene después: MERPAGO*, CLIP*, NETPAY*, SR*, etc. — deja solo el nombre del comercio.
 - Quita números de referencia/autorización/folio que no aportan nada (secuencias largas de dígitos sueltas, "001 DE 001", códigos de sucursal puramente numéricos) — pero conserva ubicación/sucursal si es parte reconocible del nombre.
 - Nunca inventes ni completes información que no esté en el texto original — es limpieza de forma, no de contenido. Si al limpiar queda ambiguo (solo un código sin nombre reconocible), déjalo tal cual mejor que inventar un comercio.
+- No sobre-simplifiques a una frase genérica que pierda el comercio o concepto real. Quitar ruido (folios, prefijos) está bien; quitar el nombre del comercio no. Error real a evitar: "MESES EN AUTOMATICO NACIONAL APPLE.COM/BILL" -> "Meses en Automático Nacional" (perdiste qué se compró). Si dudas entre dejarlo más completo o arriesgarte a que quede genérico, siempre prefiere dejarlo más completo.
 - Si la descripción ya está limpia, regrésala igual.
 
 Ejemplos:
@@ -28,6 +29,7 @@ Ejemplos:
 - "MERPAGO*GARMIN DEL MAZ" -> "Garmin del Maz"
 - "0947 EL ANGEL 3" -> "Cajero El Ángel 3"
 - "WINGSTOP DEL VALLE" -> "Wingstop del Valle"
+- "MESES EN AUTOMATICO NACIONAL APPLE.COM/BILL" -> "Apple.com/Bill (Meses en Automático)"
 
 Te doy un array de movimientos con su "id" y "description" cruda. Responde SOLO con un array JSON del mismo tamaño, en el mismo orden, con {"id": "...", "description": "..."} (la versión limpia). Nada de texto antes o después, ni fences de markdown.`;
 
