@@ -1025,22 +1025,58 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
         }}
       >
         <h2 className="mb-3 text-sm font-semibold text-zinc-100">
-          📅 Lo que ya está comprometido el próximo mes
+          📅 Cuánto puedes gastar el próximo mes, como máximo
         </h2>
-        <div className="text-3xl font-extrabold text-violet-300">
-          {money(
-            data.msiMensualTotal + data.egresoDebitoRecurrente + data.domiciliacionesTotal,
-          )}
+        <div className="flex flex-wrap items-baseline gap-3">
+          <div className="text-3xl font-extrabold text-emerald-400">
+            {money(data.saldoDisponibleGastoLibre)}
+          </div>
+          <p className="text-xs text-zinc-400">
+            Contando solo tus ingresos y costos marcados &quot;Fijo&quot;
+          </p>
         </div>
-        <p className="mt-1 text-xs text-zinc-400">
-          = {money(data.msiMensualTotal)} en mensualidades MSI +{" "}
-          {money(data.egresoDebitoRecurrente)} en costos fijos recurrentes +{" "}
-          {money(data.domiciliacionesTotal)} en domiciliaciones
-        </p>
-        <p className="mt-1 text-[11px] text-zinc-500">
-          Solo cuenta lo que sí se repite — costos fijos marcados
-          &quot;Temporal&quot; este mes no entran aquí porque por definición no
-          vuelven a aparecer.
+
+        <div className="mt-4 flex flex-col divide-y divide-zinc-800/60 text-sm">
+          <div className="flex items-center justify-between py-2">
+            <span className="text-zinc-300">💼 Ingreso Garantizado (fijo)</span>
+            <span className="font-medium text-emerald-400">
+              {money(data.ingresoRecurrente)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-zinc-300">🏠 − Costos Fijos</span>
+            <span className="font-medium text-red-400">
+              −{money(data.egresoDebitoRecurrente)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-zinc-300">🔁 − Domiciliaciones Activas</span>
+            <span className="font-medium text-red-400">
+              −{money(data.domiciliacionesTotal)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-zinc-300">📦 − Mensualidades MSI</span>
+            <span className="font-medium text-red-400">
+              −{money(data.msiMensualTotal)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between pt-3">
+            <span className="font-semibold text-zinc-100">
+              = Disponible para Gasto Libre
+            </span>
+            <span className="text-lg font-bold text-emerald-400">
+              {money(data.saldoDisponibleGastoLibre)}
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-4 text-[11px] leading-relaxed text-zinc-500">
+          Esto es un piso conservador: un ingreso o costo marcado
+          &quot;Temporal&quot; este mes no cuenta arriba porque por
+          definición no vas a volver a tenerlo el próximo mes. Si de verdad
+          se repite, márcalo &quot;Fijo&quot; en Desglose y va a entrar en
+          esta cuenta.
         </p>
       </div>
 
@@ -1121,22 +1157,6 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
         )}
       </Panel>
 
-      <Panel title="Cuánto puedes gastar el próximo mes (máximo, según ingreso)">
-        <div className="text-2xl font-bold text-emerald-400">
-          {money(data.saldoDisponibleGastoLibre)}
-        </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          Ingreso recurrente ({money(data.ingresoRecurrente)}) − costos fijos
-          recurrentes ({money(data.egresoDebitoRecurrente)}) − mensualidades
-          MSI ({money(data.msiMensualTotal)}) − domiciliaciones (
-          {money(data.domiciliacionesTotal)})
-        </p>
-        <p className="mt-1 text-[11px] text-zinc-500">
-          Usa solo ingresos y costos marcados &quot;Fijo&quot; — uno
-          &quot;Temporal&quot; de este mes no cuenta porque no vas a volver a
-          tenerlo el próximo mes.
-        </p>
-      </Panel>
     </div>
   );
 }
