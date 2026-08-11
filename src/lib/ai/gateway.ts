@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
 
 // Gateway multi-proveedor: una sola interfaz para llamar a Anthropic, OpenAI,
 // Google Gemini o DeepSeek con la API key del propio usuario (BYOK).
@@ -224,14 +224,21 @@ async function chatGemini(
     config: {
       systemInstruction: opts.system,
       maxOutputTokens: opts.maxTokens ?? 4096,
-      // Los modelos "thinking" de Gemini (3.x/2.5 flash) gastan parte de
-      // maxOutputTokens en razonamiento interno invisible antes de escribir
-      // la respuesta — con thinkingBudget sin acotar, ese consumo es
-      // impredecible y puede truncar la respuesta real aunque el JSON en sí
-      // sea corto (visto en producción: 50 items truncados con 8192
-      // tokens). Todo lo que pasa por este gateway pide JSON/texto
-      // estructurado, no necesita razonamiento visible — se desactiva.
-      thinkingConfig: { thinkingBudget: 0 },
+      // Los modelos "thinking" de Gemini gastan parte de maxOutputTokens en
+      // razonamiento interno invisible antes de escribir la respuesta — con
+      // el budget sin acotar, ese consumo es impredecible y puede truncar
+      // la respuesta real aunque el JSON en sí sea corto (visto en
+      // producción: 50 items truncados con 8192 tokens). Todo lo que pasa
+      // por este gateway pide JSON/texto estructurado, no necesita
+      // razonamiento visible.
+      //
+      // OJO: el campo cambia según la generación del modelo — NO mandar los
+      // dos juntos, la API lo rechaza con INVALID_ARGUMENT (confirmado en
+      // producción). thinkingBudget (numérico, 0 = apagado) es el campo
+      // legacy de Gemini 2.5; Gemini 3.x (el default de este gateway,
+      // gemini-3.6-flash) no soporta apagar el thinking por completo y usa
+      // en su lugar thinkingLevel ("minimal" es lo más cercano a apagado).
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
     },
   });
 
@@ -469,7 +476,7 @@ async function runAgentGemini(
       config: {
         systemInstruction: opts.system,
         maxOutputTokens: opts.maxTokens ?? 4096,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         tools,
       },
     });

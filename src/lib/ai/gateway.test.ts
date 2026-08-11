@@ -38,6 +38,7 @@ vi.mock("@google/genai", () => {
       models = { generateContent: geminiGenerateContentMock };
       constructor(public opts: { apiKey: string }) {}
     },
+    ThinkingLevel: { MINIMAL: "MINIMAL" },
   };
 });
 

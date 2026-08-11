@@ -85,19 +85,27 @@ truncó la respuesta por el límite de tokens de salida" (mensaje específico y
 accionable) de "el modelo terminó normal pero no devolvió JSON válido"
 (error genérico) — son causas y arreglos distintos.
 
-### Gemini: `thinkingConfig: { thinkingBudget: 0 }`
+### Gemini: `thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }`
 
-Los modelos "thinking" de Gemini (la línea 2.5/3.x, incluyendo
-`gemini-3.6-flash`) pueden gastar una parte de `maxOutputTokens` en
-razonamiento interno invisible *antes* de escribir la respuesta visible. Con
-el thinking budget sin acotar, ese consumo es impredecible — se vio en
-producción un lote de solo 50 transacciones truncarse con 8,192 tokens de
-salida disponibles, un tamaño que a simple vista debería sobrar. Como
-ninguna de las 4 funciones de §5 necesita razonamiento visible (todas piden
-JSON o texto estructurado, no una cadena de pensamiento), tanto `chatGemini`
-como `runAgentGemini` mandan `thinkingConfig: { thinkingBudget: 0 }` para
-desactivarlo por completo y que todo el presupuesto de tokens vaya a la
-respuesta real.
+Los modelos "thinking" de Gemini pueden gastar una parte de
+`maxOutputTokens` en razonamiento interno invisible *antes* de escribir la
+respuesta visible. Con el thinking sin acotar, ese consumo es impredecible —
+se vio en producción un lote de solo 50 transacciones truncarse con 8,192
+tokens de salida disponibles, un tamaño que a simple vista debería sobrar.
+Como ninguna de las 4 funciones de §5 necesita razonamiento visible (todas
+piden JSON o texto estructurado, no una cadena de pensamiento), tanto
+`chatGemini` como `runAgentGemini` lo acotan al mínimo.
+
+**Ojo con el campo correcto — cambia entre generaciones y no se pueden
+mandar los dos juntos** (la API responde `400 INVALID_ARGUMENT` si lo
+hacés, confirmado en producción):
+- Gemini 2.5 (legacy): `thinkingConfig.thinkingBudget` (número, `0` =
+  apagado por completo).
+- Gemini 3.x — el default de este gateway, `gemini-3.6-flash` — **no
+  soporta apagar el thinking por completo**: usa
+  `thinkingConfig.thinkingLevel` (`ThinkingLevel.MINIMAL` es lo más cercano
+  a apagado). Mandar `thinkingBudget` a un modelo 3.x, o `thinkingLevel` a
+  uno 2.5, truena la request.
 
 ## 4. Dónde viven las credenciales y cómo se protegen
 
