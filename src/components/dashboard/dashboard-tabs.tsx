@@ -679,7 +679,14 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
                 key={f.id}
                 className="flex items-center justify-between gap-2 border-b border-zinc-800/60 pb-2"
               >
-                <span className="text-zinc-300">{f.concept}</span>
+                <span className="text-zinc-300">
+                  {f.concept}
+                  {f.isRecurring && (
+                    <span className="ml-2 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-400">
+                      fijo
+                    </span>
+                  )}
+                </span>
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-zinc-100">{money(f.amount)}</span>
                   <DeleteRowButton endpoint="/api/fixed-costs" id={f.id} />

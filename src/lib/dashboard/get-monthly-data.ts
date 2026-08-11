@@ -89,7 +89,7 @@ export interface MonthlyDashboardData {
   saldoDisponibleGastoLibre: number;
   cards: CardSummary[];
   incomes: { id: string; concept: string; amount: number; isRecurring: boolean }[];
-  fixedCosts: { id: string; concept: string; amount: number }[];
+  fixedCosts: { id: string; concept: string; amount: number; isRecurring: boolean }[];
   msiPlans: MsiPlanSummary[];
   recurringCharges: RecurringChargeSummary[];
   relevantTransactionsByAccount: {
@@ -253,9 +253,11 @@ export async function getMonthlyDashboardData(
       .or(`month.eq.${month},and(is_recurring.eq.true,month.lte.${month})`),
     supabase
       .from("fixed_costs")
-      .select("id, concept, amount")
+      .select("id, concept, amount, is_recurring")
       .eq("user_id", user.id)
-      .eq("month", month),
+      // Mismo criterio que incomes arriba: temporal (mes exacto) o fijo
+      // (desde su mes de captura en adelante).
+      .or(`month.eq.${month},and(is_recurring.eq.true,month.lte.${month})`),
     supabase
       .from("msi_plans")
       .select(
@@ -542,6 +544,7 @@ export async function getMonthlyDashboardData(
       id: f.id,
       concept: f.concept,
       amount: Number(f.amount),
+      isRecurring: Boolean(f.is_recurring),
     })),
     msiPlans,
     recurringCharges,

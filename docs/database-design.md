@@ -146,7 +146,9 @@ Desglose del dashboard.
 
 ### `fixed_costs` — costos fijos (captura manual)
 Igual que `incomes` pero para gasto fijo recurrente que no pasa por
-tarjeta (renta, servicios, etc.). Mismo shape que `incomes`.
+tarjeta (renta, servicios, etc.). Mismo shape que `incomes`, incluyendo
+`is_recurring` con el mismo significado (temporal = solo su mes; fijo =
+desde su mes en adelante).
 
 ### `debts` — deudas familiares/largo plazo (captura manual)
 Préstamos de cripto, dinero prestado a/por familiares, etc. — **no** tiene

@@ -27,9 +27,7 @@ export function BudgetQuickAdd({ month }: { month: string }) {
     const body =
       kind === "debt"
         ? { concept, amount: Number(amount) }
-        : kind === "income"
-          ? { concept, amount: Number(amount), month, isRecurring }
-          : { concept, amount: Number(amount), month };
+        : { concept, amount: Number(amount), month, isRecurring };
 
     await fetch(ENDPOINT_BY_KIND[kind], {
       method: "POST",
@@ -82,7 +80,7 @@ export function BudgetQuickAdd({ month }: { month: string }) {
           className="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
         />
       </div>
-      {kind === "income" && (
+      {kind !== "debt" && (
         <div className="flex flex-col gap-1">
           <label className="text-xs text-zinc-400">Recurrencia</label>
           <select
