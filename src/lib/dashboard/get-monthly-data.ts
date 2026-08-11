@@ -88,8 +88,8 @@ export interface MonthlyDashboardData {
   msiMensualTotal: number;
   saldoDisponibleGastoLibre: number;
   cards: CardSummary[];
-  incomes: { concept: string; amount: number }[];
-  fixedCosts: { concept: string; amount: number }[];
+  incomes: { id: string; concept: string; amount: number; isRecurring: boolean }[];
+  fixedCosts: { id: string; concept: string; amount: number }[];
   msiPlans: MsiPlanSummary[];
   recurringCharges: RecurringChargeSummary[];
   relevantTransactionsByAccount: {
@@ -244,12 +244,16 @@ export async function getMonthlyDashboardData(
   ] = await Promise.all([
     supabase
       .from("incomes")
-      .select("concept, amount")
+      .select("id, concept, amount, is_recurring")
       .eq("user_id", user.id)
-      .eq("month", month),
+      // Un ingreso cuenta para este mes si: se capturó justo para este mes
+      // (temporal), o si es "fijo" (is_recurring) y su mes de captura es
+      // este mes o uno anterior — un fijo nunca cuenta hacia atrás, desde
+      // que se crea aplica de ahí en adelante.
+      .or(`month.eq.${month},and(is_recurring.eq.true,month.lte.${month})`),
     supabase
       .from("fixed_costs")
-      .select("concept, amount")
+      .select("id, concept, amount")
       .eq("user_id", user.id)
       .eq("month", month),
     supabase
@@ -529,10 +533,13 @@ export async function getMonthlyDashboardData(
     saldoDisponibleGastoLibre,
     cards,
     incomes: (incomes ?? []).map((i) => ({
+      id: i.id,
       concept: i.concept,
       amount: Number(i.amount),
+      isRecurring: Boolean(i.is_recurring),
     })),
     fixedCosts: (fixedCosts ?? []).map((f) => ({
+      id: f.id,
       concept: f.concept,
       amount: Number(f.amount),
     })),

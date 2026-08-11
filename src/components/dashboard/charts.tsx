@@ -86,6 +86,44 @@ export function FlujoDelMesChart({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+export function IngresosVsEgresosManualesChart({
+  data,
+}: {
+  data: MonthlyDashboardData;
+}) {
+  const rows = [
+    { name: "Ingresos", value: data.ingresoTotal, color: "#34D399" },
+    { name: "Egresos Manuales", value: data.egresoDebito, color: "#F59E0B" },
+    { name: "Gasto Tarjetas", value: data.gastoTarjetas, color: "#60A5FA" },
+  ];
+
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={rows} layout="vertical" margin={{ left: 24 }}>
+        <XAxis
+          type="number"
+          stroke="#6B7589"
+          tick={{ fill: "#6B7589", fontSize: 11 }}
+          tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          stroke="#6B7589"
+          tick={{ fill: "#B0BAC9", fontSize: 12 }}
+          width={120}
+        />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: "#1C2231" }} />
+        <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+          {rows.map((r, idx) => (
+            <Cell key={idx} fill={r.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function GastoPorTarjetaChart({ data }: { data: MonthlyDashboardData }) {
   const rows = data.cards
     .filter((c) => (c.gasto ?? 0) > 0)

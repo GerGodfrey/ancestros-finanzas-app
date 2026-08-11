@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("incomes")
-    .select("id, concept, amount, month")
+    .select("id, concept, amount, month, is_recurring")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
   const concept = (body.concept as string | undefined)?.trim();
   const amount = Number(body.amount);
   const month = body.month as string | undefined;
+  const isRecurring = Boolean(body.isRecurring);
 
   if (!concept || !amount || !month) {
     return NextResponse.json(
@@ -52,8 +53,8 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("incomes")
-    .insert({ user_id: user.id, concept, amount, month })
-    .select("id, concept, amount, month")
+    .insert({ user_id: user.id, concept, amount, month, is_recurring: isRecurring })
+    .select("id, concept, amount, month, is_recurring")
     .single();
 
   if (error) {

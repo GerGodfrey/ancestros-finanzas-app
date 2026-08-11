@@ -133,7 +133,7 @@ fuzzy matching, así que un cambio de descripción entre meses no se detecta.
 ### `incomes` — tus ingresos (captura manual)
 Los PDFs de tarjeta nunca traen tu nómina ni transferencias que recibes —
 por eso esta tabla existe aparte y se llena desde la pantalla de
-Configuración/Desglose del dashboard.
+Desglose del dashboard.
 
 | Columna | Tipo | Nota |
 |---|---|---|
@@ -141,7 +141,8 @@ Configuración/Desglose del dashboard.
 | `user_id` | uuid (FK) | |
 | `concept` | text | "Nómina", "Estela", etc. |
 | `amount` | numeric | |
-| `month` | date | primer día del mes al que aplica |
+| `month` | date | primer día del mes al que aplica (o del mes en que empieza, si `is_recurring`) |
+| `is_recurring` | boolean | `false` = temporal, solo cuenta para `month`. `true` = "fijo": cuenta para `month` y todos los meses siguientes, indefinidamente, hasta que se borre la fila. `get-monthly-data.ts` arma esto con un filtro `month = mes actual OR (is_recurring AND month <= mes actual)` — nunca cuenta hacia atrás de su mes de creación |
 
 ### `fixed_costs` — costos fijos (captura manual)
 Igual que `incomes` pero para gasto fijo recurrente que no pasa por

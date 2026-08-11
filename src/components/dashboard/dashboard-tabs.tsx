@@ -11,6 +11,7 @@ import {
   FlujoDelMesChart,
   GastoPorCategoriaChart,
   GastoPorTarjetaChart,
+  IngresosVsEgresosManualesChart,
 } from "./charts";
 
 const TABS = [
@@ -42,6 +43,28 @@ const formatShortDate = (dateStr: string | null) => {
   const d = new Date(`${dateStr}T00:00:00`);
   return `${String(d.getDate()).padStart(2, "0")} ${MESES_CORTOS[d.getMonth()]}`;
 };
+
+function DeleteRowButton({ endpoint, id }: { endpoint: string; id: string }) {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await fetch(`${endpoint}?id=${id}`, { method: "DELETE" });
+    router.refresh();
+  };
+
+  return (
+    <button
+      onClick={handleDelete}
+      disabled={deleting}
+      className="text-xs text-zinc-600 hover:text-red-400 disabled:opacity-50"
+      aria-label="Eliminar"
+    >
+      ✕
+    </button>
+  );
+}
 
 function Panel({
   title,
@@ -621,10 +644,23 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {data.incomes.map((i, idx) => (
-              <li key={idx} className="flex justify-between border-b border-zinc-800/60 pb-2">
-                <span className="text-zinc-300">{i.concept}</span>
-                <span className="font-medium text-zinc-100">{money(i.amount)}</span>
+            {data.incomes.map((i) => (
+              <li
+                key={i.id}
+                className="flex items-center justify-between gap-2 border-b border-zinc-800/60 pb-2"
+              >
+                <span className="text-zinc-300">
+                  {i.concept}
+                  {i.isRecurring && (
+                    <span className="ml-2 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-400">
+                      fijo
+                    </span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-100">{money(i.amount)}</span>
+                  <DeleteRowButton endpoint="/api/incomes" id={i.id} />
+                </div>
               </li>
             ))}
           </ul>
@@ -638,10 +674,16 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {data.fixedCosts.map((f, idx) => (
-              <li key={idx} className="flex justify-between border-b border-zinc-800/60 pb-2">
+            {data.fixedCosts.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-center justify-between gap-2 border-b border-zinc-800/60 pb-2"
+              >
                 <span className="text-zinc-300">{f.concept}</span>
-                <span className="font-medium text-zinc-100">{money(f.amount)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-100">{money(f.amount)}</span>
+                  <DeleteRowButton endpoint="/api/fixed-costs" id={f.id} />
+                </div>
               </li>
             ))}
           </ul>
@@ -664,8 +706,8 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         </ul>
       </Panel>
 
-      <Panel title="Gasto por Categoría (estimado)">
-        <GastoPorCategoriaChart data={data} />
+      <Panel title="Ingresos vs Egresos Manuales vs Gasto por Tarjeta">
+        <IngresosVsEgresosManualesChart data={data} />
       </Panel>
 
       <Panel title="Agregar ingreso, costo fijo o deuda familiar/largo plazo">
@@ -712,23 +754,30 @@ function MovimientosPorTarjetaTable({
 }
 
 function MovimientosTab({ data }: { data: MonthlyDashboardData }) {
-  if (data.relevantTransactionsByAccount.length === 0) {
-    return (
-      <Panel title="Movimientos Relevantes">
-        <p className="text-sm text-zinc-500">
-          No hay movimientos para este periodo.
-        </p>
-      </Panel>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {data.relevantTransactionsByAccount.map((group) => (
-        <Panel key={group.accountId} title={`Movimientos Relevantes — ${group.accountLabel}`}>
-          <MovimientosPorTarjetaTable transactions={group.transactions} />
+    <div className="flex flex-col gap-4">
+      <Panel title="Gasto por Categoría (estimado)">
+        <GastoPorCategoriaChart data={data} />
+      </Panel>
+
+      {data.relevantTransactionsByAccount.length === 0 ? (
+        <Panel title="Movimientos Relevantes">
+          <p className="text-sm text-zinc-500">
+            No hay movimientos para este periodo.
+          </p>
         </Panel>
-      ))}
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {data.relevantTransactionsByAccount.map((group) => (
+            <Panel
+              key={group.accountId}
+              title={`Movimientos Relevantes — ${group.accountLabel}`}
+            >
+              <MovimientosPorTarjetaTable transactions={group.transactions} />
+            </Panel>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

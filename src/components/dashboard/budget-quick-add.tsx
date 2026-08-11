@@ -14,6 +14,7 @@ export function BudgetQuickAdd({ month }: { month: string }) {
   const [kind, setKind] = useState<"income" | "fixed" | "debt">("income");
   const [concept, setConcept] = useState("");
   const [amount, setAmount] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -26,7 +27,9 @@ export function BudgetQuickAdd({ month }: { month: string }) {
     const body =
       kind === "debt"
         ? { concept, amount: Number(amount) }
-        : { concept, amount: Number(amount), month };
+        : kind === "income"
+          ? { concept, amount: Number(amount), month, isRecurring }
+          : { concept, amount: Number(amount), month };
 
     await fetch(ENDPOINT_BY_KIND[kind], {
       method: "POST",
@@ -37,6 +40,7 @@ export function BudgetQuickAdd({ month }: { month: string }) {
     setSaving(false);
     setConcept("");
     setAmount("");
+    setIsRecurring(false);
     router.refresh();
   }
 
@@ -78,6 +82,19 @@ export function BudgetQuickAdd({ month }: { month: string }) {
           className="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
         />
       </div>
+      {kind === "income" && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-zinc-400">Recurrencia</label>
+          <select
+            value={isRecurring ? "recurring" : "temporary"}
+            onChange={(e) => setIsRecurring(e.target.value === "recurring")}
+            className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+          >
+            <option value="temporary">Temporal (solo este mes)</option>
+            <option value="recurring">Fijo (este mes en adelante)</option>
+          </select>
+        </div>
+      )}
       <button
         type="submit"
         disabled={saving}
