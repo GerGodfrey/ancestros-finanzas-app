@@ -63,6 +63,41 @@ export interface GatewayChatResult {
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
+// Los 4 proveedores devuelven errores transitorios de sobrecarga bajo
+// distintos disfraces (Anthropic: 429/529 "overloaded_error", OpenAI: 429/503,
+// Gemini: 503 "UNAVAILABLE"/429 "RESOURCE_EXHAUSTED") — reintenta con backoff
+// en vez de fallar el parseo/chat completo por un pico de demanda momentáneo.
+const RETRYABLE_STATUS_CODES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+const RETRYABLE_MESSAGE_RE =
+  /\b(429|500|502|503|504|529)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|rate.?limit/i;
+
+function isRetryableError(err: unknown): boolean {
+  const status = (err as { status?: number; statusCode?: number } | null)
+    ?.status;
+  const statusCode = (err as { status?: number; statusCode?: number } | null)
+    ?.statusCode;
+  if (
+    (typeof status === "number" && RETRYABLE_STATUS_CODES.has(status)) ||
+    (typeof statusCode === "number" && RETRYABLE_STATUS_CODES.has(statusCode))
+  ) {
+    return true;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return RETRYABLE_MESSAGE_RE.test(message);
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries || !isRetryableError(err)) throw err;
+      const delayMs = 1000 * 2 ** attempt + Math.random() * 300;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: process.env.ANTHROPIC_DEFAULT_MODEL ?? "claude-sonnet-5",
   // Ajustar cuando se confirme el modelo por defecto que se quiera ofrecer;
@@ -124,12 +159,14 @@ async function chatAnthropic(
     return { role: m.role, content: m.content };
   });
 
-  const response = await client.messages.create({
-    model: opts.model,
-    max_tokens: opts.maxTokens ?? 4096,
-    system: opts.system,
-    messages,
-  });
+  const response = await withRetry(() =>
+    client.messages.create({
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 4096,
+      system: opts.system,
+      messages,
+    }),
+  );
 
   const text = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
@@ -164,16 +201,18 @@ async function chatOpenAICompatible(
     baseURL: provider === "deepseek" ? DEEPSEEK_BASE_URL : undefined,
   });
 
-  const response = await client.chat.completions.create({
-    model: opts.model,
-    max_tokens: opts.maxTokens ?? 4096,
-    messages: [
-      ...(opts.system
-        ? [{ role: "system" as const, content: opts.system }]
-        : []),
-      ...opts.messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-  });
+  const response = await withRetry(() =>
+    client.chat.completions.create({
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 4096,
+      messages: [
+        ...(opts.system
+          ? [{ role: "system" as const, content: opts.system }]
+          : []),
+        ...opts.messages.map((m) => ({ role: m.role, content: m.content })),
+      ],
+    }),
+  );
 
   const text = response.choices[0]?.message?.content ?? "";
 
@@ -218,29 +257,31 @@ async function chatGemini(
     return { role: toGeminiRole(m.role), parts };
   });
 
-  const response = await client.models.generateContent({
-    model: opts.model,
-    contents,
-    config: {
-      systemInstruction: opts.system,
-      maxOutputTokens: opts.maxTokens ?? 4096,
-      // Los modelos "thinking" de Gemini gastan parte de maxOutputTokens en
-      // razonamiento interno invisible antes de escribir la respuesta — con
-      // el budget sin acotar, ese consumo es impredecible y puede truncar
-      // la respuesta real aunque el JSON en sí sea corto (visto en
-      // producción: 50 items truncados con 8192 tokens). Todo lo que pasa
-      // por este gateway pide JSON/texto estructurado, no necesita
-      // razonamiento visible.
-      //
-      // OJO: el campo cambia según la generación del modelo — NO mandar los
-      // dos juntos, la API lo rechaza con INVALID_ARGUMENT (confirmado en
-      // producción). thinkingBudget (numérico, 0 = apagado) es el campo
-      // legacy de Gemini 2.5; Gemini 3.x (el default de este gateway,
-      // gemini-3.6-flash) no soporta apagar el thinking por completo y usa
-      // en su lugar thinkingLevel ("minimal" es lo más cercano a apagado).
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-    },
-  });
+  const response = await withRetry(() =>
+    client.models.generateContent({
+      model: opts.model,
+      contents,
+      config: {
+        systemInstruction: opts.system,
+        maxOutputTokens: opts.maxTokens ?? 4096,
+        // Los modelos "thinking" de Gemini gastan parte de maxOutputTokens en
+        // razonamiento interno invisible antes de escribir la respuesta — con
+        // el budget sin acotar, ese consumo es impredecible y puede truncar
+        // la respuesta real aunque el JSON en sí sea corto (visto en
+        // producción: 50 items truncados con 8192 tokens). Todo lo que pasa
+        // por este gateway pide JSON/texto estructurado, no necesita
+        // razonamiento visible.
+        //
+        // OJO: el campo cambia según la generación del modelo — NO mandar los
+        // dos juntos, la API lo rechaza con INVALID_ARGUMENT (confirmado en
+        // producción). thinkingBudget (numérico, 0 = apagado) es el campo
+        // legacy de Gemini 2.5; Gemini 3.x (el default de este gateway,
+        // gemini-3.6-flash) no soporta apagar el thinking por completo y usa
+        // en su lugar thinkingLevel ("minimal" es lo más cercano a apagado).
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+      },
+    }),
+  );
 
   return {
     text: response.text ?? "",
@@ -340,13 +381,15 @@ async function runAgentAnthropic(
   const toolCalls: AgentToolCallTrace[] = [];
 
   for (let step = 0; step < opts.maxSteps; step++) {
-    const response = await client.messages.create({
-      model: opts.model,
-      max_tokens: opts.maxTokens ?? 4096,
-      system: opts.system,
-      messages,
-      tools,
-    });
+    const response = await withRetry(() =>
+      client.messages.create({
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 4096,
+        system: opts.system,
+        messages,
+        tools,
+      }),
+    );
 
     messages.push({ role: "assistant", content: response.content });
 
@@ -408,12 +451,14 @@ async function runAgentOpenAICompatible(
   const toolCalls: AgentToolCallTrace[] = [];
 
   for (let step = 0; step < opts.maxSteps; step++) {
-    const response = await client.chat.completions.create({
-      model: opts.model,
-      max_tokens: opts.maxTokens ?? 4096,
-      messages,
-      tools,
-    });
+    const response = await withRetry(() =>
+      client.chat.completions.create({
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 4096,
+        messages,
+        tools,
+      }),
+    );
 
     const choice = response.choices[0];
     const message = choice.message;
@@ -470,16 +515,18 @@ async function runAgentGemini(
   const toolCalls: AgentToolCallTrace[] = [];
 
   for (let step = 0; step < opts.maxSteps; step++) {
-    const response = await client.models.generateContent({
-      model: opts.model,
-      contents,
-      config: {
-        systemInstruction: opts.system,
-        maxOutputTokens: opts.maxTokens ?? 4096,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-        tools,
-      },
-    });
+    const response = await withRetry(() =>
+      client.models.generateContent({
+        model: opts.model,
+        contents,
+        config: {
+          systemInstruction: opts.system,
+          maxOutputTokens: opts.maxTokens ?? 4096,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          tools,
+        },
+      }),
+    );
 
     const functionCalls = response.functionCalls ?? [];
     const responseParts =

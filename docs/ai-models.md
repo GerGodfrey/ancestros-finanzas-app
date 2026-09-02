@@ -107,6 +107,20 @@ hacés, confirmado en producción):
   a apagado). Mandar `thinkingBudget` a un modelo 3.x, o `thinkingLevel` a
   uno 2.5, truena la request.
 
+### Reintentos automáticos con backoff (errores transitorios)
+
+Los 4 proveedores devuelven errores de sobrecarga bajo distintos disfraces
+(Anthropic: `429`/`529` "overloaded_error"; OpenAI/DeepSeek: `429`/`503`;
+Gemini: `503` "UNAVAILABLE"/`429` "RESOURCE_EXHAUSTED") — visto en
+producción con Gemini durante un pico de demanda. `withRetry()` en
+`gateway.ts` envuelve la llamada real al SDK (los 6 call sites: `chat()` y
+cada paso de `runAgent()`, por proveedor) y reintenta hasta 2 veces con
+backoff exponencial (~1s, ~2s + jitter) cuando `isRetryableError()`
+reconoce el error — por código de estado (`408/409/429/500/502/503/504/529`)
+o por texto del mensaje (`UNAVAILABLE`, `RESOURCE_EXHAUSTED`, "overloaded",
+"rate limit"). Errores no transitorios (ej. API key inválida, `401`) fallan
+de inmediato, sin reintentar en vano.
+
 ## 4. Dónde viven las credenciales y cómo se protegen
 
 - **Guardado**: `POST /api/providers` valida la key con `verifyApiKey()`
@@ -288,6 +302,10 @@ De `.env.local.example`:
 | `ANTHROPIC_DEFAULT_MODEL`, `OPENAI_DEFAULT_MODEL`, `GEMINI_DEFAULT_MODEL`, `DEEPSEEK_DEFAULT_MODEL` | No | Sobreescribe `DEFAULT_MODELS` en `gateway.ts` sin tocar código — útil para subir de versión un modelo (ej. cuando Gemini deprecó `gemini-2.5-flash`, ver commit de ese fix) sin redeploy de lógica |
 
 ## 8. Manejo de errores común a las 4 funciones
+
+Antes de llegar a este punto, cada llamada al SDK ya pasó por el retry con
+backoff del gateway (§3) — lo de aquí abajo es lo que pasa cuando el error
+persiste después de esos reintentos, o no era un error transitorio.
 
 Todas comparten el mismo patrón: si la llamada al modelo falla o la
 respuesta no es JSON válido (`extractJson()` en

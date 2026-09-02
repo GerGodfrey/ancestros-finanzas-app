@@ -249,6 +249,44 @@ describe("gateway: chat", () => {
     expect(openaiCreateMock).not.toHaveBeenCalled();
   });
 
+  it("reintenta con backoff cuando el proveedor responde un error transitorio (503) y luego funciona", async () => {
+    vi.useFakeTimers();
+    const overloaded = Object.assign(new Error("UNAVAILABLE"), {
+      status: 503,
+    });
+    geminiGenerateContentMock
+      .mockRejectedValueOnce(overloaded)
+      .mockResolvedValueOnce({ text: "hola desde gemini" });
+
+    const resultPromise = chat({
+      provider: "gemini",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "hola" }],
+    });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result.text).toBe("hola desde gemini");
+    expect(geminiGenerateContentMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("no reintenta errores no transitorios (ej. API key inválida)", async () => {
+    const authError = Object.assign(new Error("invalid api key"), {
+      status: 401,
+    });
+    geminiGenerateContentMock.mockRejectedValue(authError);
+
+    await expect(
+      chat({
+        provider: "gemini",
+        apiKey: "fake-key",
+        messages: [{ role: "user", content: "hola" }],
+      }),
+    ).rejects.toThrow(/invalid api key/);
+    expect(geminiGenerateContentMock).toHaveBeenCalledTimes(1);
+  });
+
   it("usa el modelo por defecto cuando no se especifica uno", async () => {
     anthropicCreateMock.mockResolvedValue({
       content: [{ type: "text", text: "ok" }],
