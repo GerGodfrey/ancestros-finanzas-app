@@ -128,6 +128,16 @@ como plan activo, se actualiza `installments_paid`; si no, se crea.
 | `first_statement_id` | uuid (FK) | en qué statement se vio por primera vez |
 | `status` | text | `active` \| `finished` |
 
+**No es la fuente de verdad para ver un mes pasado:** esta tabla refleja el
+estado *actual* de cada plan — se sobreescribe cada vez que se parsea un
+statement nuevo, sin importar el mes de ese statement. El dashboard mensual
+(`get-monthly-data.ts`) NO la usa para mostrar cifras de un mes específico
+(`cards[].deudaMsi`, `msiDebts`, `msiPlans`, `msiMensualTotal`) — usa
+`statements.raw_extraction.msi_plans` del propio statement de ESE mes, que
+sí quedó "congelado" con el `balance_remaining`/`installment_number` de ese
+corte. Esta tabla (`msi_plans`) se sigue usando para: el upsert de estado
+vivo tras cada parseo, y la herramienta `get_msi_plans` del chatbot.
+
 ### `recurring_charges` — domiciliaciones
 Detección automática (`src/lib/recurring-charges.ts`, sin IA — es
 determinístico) que corre al terminar de parsear un statement: si la
@@ -138,10 +148,17 @@ de las fechas encontradas). Si una domiciliación activa no aparece en el
 statement recién parseado, se marca `active = false` (se asume cancelada o
 pagada por otro medio). Coincidencia por texto exacto normalizado — no hay
 fuzzy matching, así que un cambio de descripción entre meses no se detecta.
-La suma de `typical_amount` de las domiciliaciones activas
-(`domiciliacionesTotal` en `get-monthly-data.ts`) se resta también en "Cuánto
-puedes gastar el próximo mes" — son cargos a la tarjeta tan comprometidos
-como una mensualidad MSI, aunque no pasen por `msi_plans`.
+**Tampoco es la fuente de verdad para ver un mes pasado** (mismo problema
+que `msi_plans`: `typical_amount`/`last_seen` se sobreescriben con cada
+parseo nuevo, sin importar el mes). El dashboard mensual solo usa esta
+tabla para saber **qué descripciones cuentan** como domiciliación
+detectada — el monto y la fecha que se muestran para un mes específico
+(`recurringCharges` en `get-monthly-data.ts`) salen de las `transactions`
+de ESE mes que hacen match con esas descripciones; si la domiciliación no
+cobró nada ese mes, no aparece. La suma de esos montos (ya filtrados por
+mes) es `domiciliacionesTotal`, que se resta en "Cuánto puedes gastar el
+próximo mes" — son cargos a la tarjeta tan comprometidos como una
+mensualidad MSI, aunque no pasen por `msi_plans`.
 
 ### `incomes` — tus ingresos (captura manual)
 Los PDFs de tarjeta nunca traen tu nómina ni transferencias que recibes —
@@ -231,6 +248,41 @@ Subes un PDF (eligiendo a mano a qué tarjeta pertenece)
   → el Dashboard agrega todo esto + incomes + fixed_costs → KPIs del mes
   → el Chatbot consulta estas mismas tablas en vivo cuando le preguntas algo
 ```
+
+## Regla dura: aislamiento por mes en el dashboard
+
+El dashboard de un mes (`getMonthlyDashboardData(targetMonth)` en
+`src/lib/dashboard/get-monthly-data.ts`) solo puede mostrar datos extraídos
+del PDF de **ese** mes — nunca el estado "en vivo" de una tabla que ya se
+actualizó con statements más nuevos. Esto es un requisito explícito del
+producto, no una optimización: ver julio con datos de septiembre (aunque
+sea sin querer, por cómo se calculaba antes) es peor que no mostrar nada.
+
+Cómo se cumple:
+
+- Si no hay ningún `statement` con `status = 'parsed'` para el mes pedido,
+  la función regresa `hasData: false` de inmediato — no se calcula ni se
+  muestra ningún panel "en vivo" (MSI, domiciliaciones, deudas) para ese
+  mes, aunque el usuario sí tenga datos en otros meses.
+- Cifras de MSI (`cards[].deudaMsi`, `msiDebts`, `msiPlans`,
+  `msiMensualTotal`) se calculan desde `raw_extraction.msi_plans` del
+  statement de ese mes — nunca desde la tabla `msi_plans`, que es mutable
+  (ver nota en la sección de esa tabla arriba).
+- Domiciliaciones (`recurringCharges`, `domiciliacionesTotal`) se calculan
+  cruzando las `transactions` de ese mes contra las descripciones conocidas
+  de `recurring_charges` — nunca desde `typical_amount`/`last_seen`
+  (también mutables).
+- Excepción conocida y aceptada: `debts` ("Deudas Familiares/Largo Plazo")
+  no tiene columna `month` en el esquema — es un tracker de estado actual,
+  no un historial, así que se muestra igual sin importar qué mes se esté
+  viendo.
+
+**Incidente real que motivó la validación de emisor/last4 al subir un
+PDF:** un PDF de American Express quedó guardado bajo la cuenta de Palacio
+de Hierro porque el usuario seleccionó la tarjeta equivocada al subirlo —
+su saldo y sus planes MSI se mezclaron silenciosamente con esa tarjeta
+hasta que se detectó a mano. `checkStatementMatchesAccount()` ahora
+bloquea ese caso antes de guardar cualquier dato.
 
 ## Notas de seguridad
 

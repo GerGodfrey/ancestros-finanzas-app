@@ -85,6 +85,7 @@ export interface StatusBadge {
 export interface MonthlyDashboardData {
   hasData: boolean;
   monthLabel: string | null; // 'YYYY-MM-01'
+  availableMonths: string[]; // 'YYYY-MM', ascending, meses con al menos un statement parseado
   statusBadge: StatusBadge | null;
   ingresoTotal: number;
   egresoDebito: number;
@@ -124,6 +125,7 @@ export interface MonthlyDashboardData {
 const EMPTY_DATA: MonthlyDashboardData = {
   hasData: false,
   monthLabel: null,
+  availableMonths: [],
   statusBadge: null,
   ingresoTotal: 0,
   egresoDebito: 0,
@@ -158,6 +160,34 @@ function monthKey(dateStr: string): string {
 
 function firstOfMonth(dateStr: string): string {
   return `${monthKey(dateStr)}-01`;
+}
+
+// Regla dura: el dashboard de un mes solo puede mostrar datos extraídos del
+// PDF de ESE mes — nunca el estado "en vivo" de otra tabla que ya se
+// actualizó con statements más nuevos. msi_plans y recurring_charges son
+// tablas mutables que reflejan el estado de HOY (se sobreescriben en cada
+// parseo), así que para cualquier cifra que se muestre "para el mes X" se
+// usa la extracción cruda (raw_extraction) del statement de ESE mes, que sí
+// quedó congelada en el momento del parseo.
+interface RawMsiPlanExtraction {
+  concept: string;
+  monthly_payment: number;
+  installment_number: number;
+  total_installments: number;
+  balance_remaining?: number;
+}
+
+function getStatementMsiPlans(raw: unknown): RawMsiPlanExtraction[] {
+  const parsed = raw as { msi_plans?: RawMsiPlanExtraction[] } | null | undefined;
+  return parsed?.msi_plans ?? [];
+}
+
+function msiPlanRemainingBalance(plan: RawMsiPlanExtraction): number {
+  if (typeof plan.balance_remaining === "number") return plan.balance_remaining;
+  return (
+    Number(plan.monthly_payment ?? 0) *
+    Math.max(0, Number(plan.total_installments ?? 0) - Number(plan.installment_number ?? 0))
+  );
 }
 
 const CASH_WITHDRAWAL_RE = /retiro|disposici[oó]n|cajero/i;
@@ -244,6 +274,10 @@ export async function getMonthlyDashboardData(
 
   if (!parsedStatements || parsedStatements.length === 0) return EMPTY_DATA;
 
+  const availableMonths = Array.from(
+    new Set(parsedStatements.map((s) => monthKey(s.period_end as string))),
+  ).sort();
+
   const month =
     targetMonth ?? firstOfMonth(parsedStatements[0].period_end as string);
   const monthPrefix = month.slice(0, 7);
@@ -252,10 +286,17 @@ export async function getMonthlyDashboardData(
     (s) => s.period_end && monthKey(s.period_end as string) === monthPrefix,
   );
 
+  // Regla dura: si no hay ni un statement parseado para el mes que se está
+  // viendo, el dashboard no muestra nada de ese mes — ni siquiera paneles
+  // "en vivo" (MSI, domiciliaciones, deudas) que antes se mostraban sin
+  // importar el mes. Sin PDF de este mes, no hay nada que mostrar.
+  if (statementsInMonth.length === 0) {
+    return { ...EMPTY_DATA, hasData: false, monthLabel: month, availableMonths };
+  }
+
   const [
     { data: incomes },
     { data: fixedCosts },
-    { data: msiPlansRaw },
     { data: monthlySummary },
     { data: standingDebtsRaw },
     { data: recurringChargesRaw },
@@ -277,29 +318,30 @@ export async function getMonthlyDashboardData(
       // (desde su mes de captura en adelante).
       .or(`month.eq.${month},and(is_recurring.eq.true,month.lte.${month})`),
     supabase
-      .from("msi_plans")
-      .select(
-        "concept, account_id, monthly_payment, installments_paid, total_installments",
-      )
-      .eq("user_id", user.id)
-      .eq("status", "active"),
-    supabase
       .from("monthly_summaries")
       .select("insights, recommendations")
       .eq("user_id", user.id)
       .eq("month", month)
       .maybeSingle(),
+    // Deudas familiares/largo plazo no tienen concepto de "mes" en el
+    // esquema (son un tracker vivo, no un historial) — se listan igual en
+    // cualquier mes que se esté viendo. Ver aviso en get-monthly-data sobre
+    // esta limitación.
     supabase
       .from("debts")
       .select("id, concept, amount, note")
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),
+    // Solo se usa para saber qué descripciones cuentan como domiciliación
+    // detectada (patrón repetido) — el monto y la fecha que se muestran
+    // salen de las transacciones de ESTE mes (más abajo), nunca de estos
+    // campos, que se sobreescriben con cada statement nuevo sin importar el
+    // mes.
     supabase
       .from("recurring_charges")
-      .select("id, account_id, description, typical_amount, last_seen")
+      .select("id, account_id, description")
       .eq("user_id", user.id)
-      .eq("active", true)
-      .order("typical_amount", { ascending: false }),
+      .eq("active", true),
   ]);
 
   const statementIds = statementsInMonth.map((s) => s.id);
@@ -368,8 +410,8 @@ export async function getMonthlyDashboardData(
     const limite = account?.credit_limit ?? null;
     const utilizacion =
       limite && disponible !== null ? (limite - disponible) / limite : null;
-    const deudaMsi = (msiPlansRaw ?? [])
-      .filter((p) => p.account_id === s.account_id)
+    const deudaMsi = getStatementMsiPlans(s.raw_extraction)
+      .filter((p) => p.installment_number < p.total_installments)
       .reduce((sum, p) => sum + Number(p.monthly_payment ?? 0), 0);
     const interesGenerado = Number(s.interest_charged ?? 0);
 
@@ -394,26 +436,22 @@ export async function getMonthlyDashboardData(
     };
   });
 
-  // --- Panorama de deudas: MSI restante por cuenta (todas las cuentas, no
-  // solo las que tuvieron statement este mes) ---
-  const msiDebts: MsiDebtSummary[] = accounts.map((account) => {
-    const plans = (msiPlansRaw ?? []).filter(
-      (p) => p.account_id === account.id,
-    );
+  // --- Panorama de deudas: MSI restante por cuenta, según lo que diga el
+  // statement DE ESTE MES de cada cuenta — solo cuentas con statement este
+  // mes (antes se mostraban todas las cuentas con su estado "en vivo" de
+  // hoy, sin importar el mes que se estuviera viendo). ---
+  const msiDebts: MsiDebtSummary[] = statementsInMonth.map((s) => {
+    const account = accountById.get(s.account_id);
+    const plans = getStatementMsiPlans(s.raw_extraction);
     const remainingDebt = plans.reduce(
-      (sum, p) =>
-        sum +
-        Number(p.monthly_payment ?? 0) *
-          Math.max(
-            0,
-            Number(p.total_installments ?? 0) -
-              Number(p.installments_paid ?? 0),
-          ),
+      (sum, p) => sum + msiPlanRemainingBalance(p),
       0,
     );
     return {
-      accountId: account.id,
-      accountLabel: `${account.issuer} ${account.product_name}`,
+      accountId: s.account_id,
+      accountLabel: account
+        ? `${account.issuer} ${account.product_name}`
+        : "Cuenta",
       remainingDebt,
       concepts: plans.map((p) => p.concept),
     };
@@ -437,10 +475,75 @@ export async function getMonthlyDashboardData(
   );
   const egresoTotal = gastoTarjetas + egresoDebito;
   const balance = ingresoTotal - egresoTotal;
-  const msiMensualTotal = (msiPlansRaw ?? []).reduce(
-    (sum, p) => sum + Number(p.monthly_payment ?? 0),
+
+  // --- MSI: mensualidad total y lista de planes activos, calculados con lo
+  // que dice el statement DE ESTE MES de cada tarjeta (no con la tabla
+  // msi_plans, que es un estado mutable "de hoy" — ver nota arriba). ---
+  const statementMsiPlansByAccount = statementsInMonth.map((s) => ({
+    accountLabel: accountLabel(s.account_id),
+    plans: getStatementMsiPlans(s.raw_extraction).filter(
+      (p) => p.installment_number < p.total_installments,
+    ),
+  }));
+  const msiMensualTotal = statementMsiPlansByAccount.reduce(
+    (sum, group) =>
+      sum +
+      group.plans.reduce((s2, p) => s2 + Number(p.monthly_payment ?? 0), 0),
     0,
   );
+  const msiPlans: MsiPlanSummary[] = statementMsiPlansByAccount.flatMap(
+    (group) =>
+      group.plans.map((p) => ({
+        concept: p.concept,
+        accountLabel: group.accountLabel,
+        monthlyPayment: Number(p.monthly_payment ?? 0),
+        installmentsPaid: p.installment_number,
+        totalInstallments: p.total_installments,
+      })),
+  );
+
+  const transactionsList = transactions ?? [];
+
+  // --- Domiciliaciones activas ESTE MES: recurring_charges solo dice qué
+  // descripciones son un patrón detectado (histórico, comparando varios
+  // statements) — el monto y la fecha que se muestran salen de las
+  // transacciones DE ESTE MES, nunca de las columnas de esa tabla (que se
+  // sobreescriben con cada statement nuevo sin importar el mes que se esté
+  // viendo). Si la domiciliación no cobró nada este mes, no aparece.
+  const recurringChargeByKey = new Map(
+    (recurringChargesRaw ?? []).map((r) => [
+      `${r.account_id}::${String(r.description).trim().toUpperCase()}`,
+      r,
+    ]),
+  );
+  const recurringMatchesThisMonth = new Map<
+    string,
+    { amounts: number[]; dates: string[] }
+  >();
+  for (const t of transactionsList) {
+    const key = `${t.account_id}::${t.description.trim().toUpperCase()}`;
+    if (!recurringChargeByKey.has(key)) continue;
+    const entry = recurringMatchesThisMonth.get(key) ?? {
+      amounts: [],
+      dates: [],
+    };
+    entry.amounts.push(Number(t.amount));
+    entry.dates.push(t.tx_date);
+    recurringMatchesThisMonth.set(key, entry);
+  }
+  const recurringCharges: RecurringChargeSummary[] = Array.from(
+    recurringMatchesThisMonth.entries(),
+  ).map(([key, match]) => {
+    const r = recurringChargeByKey.get(key)!;
+    return {
+      id: r.id,
+      description: r.description,
+      accountLabel: accountLabel(r.account_id as string),
+      typicalAmount:
+        match.amounts.reduce((sum, a) => sum + a, 0) / match.amounts.length,
+      lastSeen: match.dates.reduce((a, b) => (a > b ? a : b)),
+    };
+  });
 
   // --- Proyección a próximo mes: solo lo que sí va a repetirse ---
   // ingresoTotal/egresoDebito de arriba son el balance REAL de este mes
@@ -454,8 +557,8 @@ export async function getMonthlyDashboardData(
   const egresoDebitoRecurrente = (fixedCosts ?? [])
     .filter((f) => f.is_recurring)
     .reduce((sum, f) => sum + Number(f.amount), 0);
-  const domiciliacionesTotal = (recurringChargesRaw ?? []).reduce(
-    (sum, r) => sum + Number(r.typical_amount ?? 0),
+  const domiciliacionesTotal = recurringCharges.reduce(
+    (sum, r) => sum + r.typicalAmount,
     0,
   );
   const saldoDisponibleGastoLibre =
@@ -463,16 +566,13 @@ export async function getMonthlyDashboardData(
     (egresoDebitoRecurrente + msiMensualTotal + domiciliacionesTotal);
 
   // --- Movimientos relevantes: top 6 por tarjeta ---
-  // Claves "accountId::DESCRIPCIÓN" de domiciliaciones activas — se usan
-  // para bloquear la edición manual de descripción en esos movimientos (ver
-  // RelevantTransaction.isEditable).
-  const recurringDescriptionKeys = new Set(
-    (recurringChargesRaw ?? []).map(
-      (r) => `${r.account_id}::${String(r.description).trim().toUpperCase()}`,
-    ),
-  );
+  // Claves "accountId::DESCRIPCIÓN" de domiciliaciones detectadas (el set
+  // global, no solo las de este mes) — se usan para bloquear la edición
+  // manual de descripción en esos movimientos (ver
+  // RelevantTransaction.isEditable), sin importar si cobraron justo este
+  // mes o no.
+  const recurringDescriptionKeys = new Set(recurringChargeByKey.keys());
 
-  const transactionsList = transactions ?? [];
   const toRelevant = (t: (typeof transactionsList)[number]): RelevantTransaction => ({
     id: t.id,
     accountLabel: accountLabel(t.account_id),
@@ -533,26 +633,6 @@ export async function getMonthlyDashboardData(
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 
-  // --- MSI plans (para pestaña Próximo Mes) ---
-  const msiPlans: MsiPlanSummary[] = (msiPlansRaw ?? []).map((p) => ({
-    concept: p.concept,
-    accountLabel: accountLabel(p.account_id),
-    monthlyPayment: Number(p.monthly_payment ?? 0),
-    installmentsPaid: p.installments_paid ?? 0,
-    totalInstallments: p.total_installments,
-  }));
-
-  // --- Domiciliaciones activas (detectadas automáticamente al parsear) ---
-  const recurringCharges: RecurringChargeSummary[] = (recurringChargesRaw ?? []).map(
-    (r) => ({
-      id: r.id,
-      description: r.description,
-      accountLabel: accountLabel(r.account_id as string),
-      typicalAmount: Number(r.typical_amount ?? 0),
-      lastSeen: r.last_seen,
-    }),
-  );
-
   // --- Validación: avisos del Skill + checks de consistencia ---
   const validationIssues: ValidationIssue[] = [];
   for (const s of statementsInMonth) {
@@ -586,6 +666,7 @@ export async function getMonthlyDashboardData(
   return {
     hasData: true,
     monthLabel: month,
+    availableMonths,
     statusBadge,
     ingresoTotal,
     egresoDebito,

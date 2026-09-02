@@ -91,7 +91,8 @@ que quede en verde.**
    el PDF no corresponde a la tarjeta seleccionada, el parseo se rechaza
    con un error explícito en vez de guardarse en la cuenta equivocada).
 4. Dashboard → revisa Resumen / Desglose / Movimientos / Próximo Mes /
-   Validación.
+   Validación, y navega entre meses con el selector junto al título (solo
+   deben aparecer datos del mes que tenga un PDF procesado).
 5. Chat → pregúntale algo sobre un movimiento real.
 
 ## 6. Deploy a Vercel

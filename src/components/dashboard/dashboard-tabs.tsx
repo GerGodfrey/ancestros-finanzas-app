@@ -176,8 +176,9 @@ export function DashboardTabs({ data }: { data: MonthlyDashboardData }) {
     return (
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-8 text-center">
         <p className="text-sm text-zinc-400">
-          Todavía no hay estados de cuenta procesados. Sube un PDF para
-          empezar a ver tu dashboard.
+          {data.monthLabel
+            ? `No hay estados de cuenta subidos para ${data.monthLabel.slice(0, 7)} — sube el PDF de ese mes, o navega a otro mes arriba.`
+            : "Todavía no hay estados de cuenta procesados. Sube un PDF para empezar a ver tu dashboard."}
         </p>
       </div>
     );
