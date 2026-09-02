@@ -4,6 +4,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { parseStatementPdf } from "@/lib/ai/parse-statement";
 import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
 import { detectRecurringCharges } from "@/lib/recurring-charges";
+import { checkStatementMatchesAccount } from "@/lib/statement-account-match";
 import type { Provider } from "@/lib/ai/gateway";
 
 export async function POST(
@@ -29,6 +30,20 @@ export async function POST(
   if (statementError || !statement) {
     return NextResponse.json(
       { error: "Estado de cuenta no encontrado" },
+      { status: 404 },
+    );
+  }
+
+  const { data: targetAccount, error: accountError } = await supabase
+    .from("accounts")
+    .select("issuer, last4")
+    .eq("id", statement.account_id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (accountError || !targetAccount) {
+    return NextResponse.json(
+      { error: "Tarjeta de este estado de cuenta no encontrada" },
       { status: 404 },
     );
   }
@@ -85,10 +100,33 @@ export async function POST(
   const s = parsed.statement as Record<string, unknown>;
   const a = parsed.account as Record<string, unknown>;
 
+  // Verifica que el PDF sí sea de la tarjeta que el usuario seleccionó antes
+  // de subirlo — si no, el statement se rechaza en vez de guardarse bajo la
+  // cuenta equivocada (pasó en producción: un PDF de Amex quedó mezclado con
+  // Palacio de Hierro porque el usuario seleccionó la tarjeta incorrecta).
+  const accountMatch = checkStatementMatchesAccount({
+    extractedIssuer: typeof a.issuer === "string" ? a.issuer : null,
+    extractedLast4: typeof a.last4 === "string" ? a.last4 : null,
+    accountIssuer: targetAccount.issuer,
+    accountLast4: targetAccount.last4,
+  });
+  if (!accountMatch.ok) {
+    await supabase.from("statements").update({ status: "error" }).eq("id", id);
+    return NextResponse.json(
+      {
+        error: `Este PDF no parece ser de la tarjeta seleccionada: ${accountMatch.errors.join(" ")} Verifica que elegiste la tarjeta correcta antes de subir el PDF.`,
+      },
+      { status: 400 },
+    );
+  }
+
   // 0) Sincroniza límite/tasas de la cuenta con lo que diga el PDF más
   // reciente (el usuario suele crear la tarjeta sin estos datos a mano,
   // antes de tener un PDF que los traiga — y el banco los puede cambiar).
   const accountUpdate: Record<string, unknown> = {};
+  if (a.last4 !== undefined && a.last4 !== null) {
+    accountUpdate.last4 = a.last4;
+  }
   if (a.credit_limit !== undefined && a.credit_limit !== null) {
     accountUpdate.credit_limit = a.credit_limit;
   }

@@ -72,6 +72,14 @@ mano, desde la pantalla de subida).
 | `rate_ordinaria` / `rate_moratoria` | numeric | tasas anuales |
 | `active` | boolean | |
 
+El usuario puede editar (`PATCH`), borrar (`DELETE`) o agregar tarjetas
+(`POST`) desde Configuración (`src/components/account-settings.tsx` →
+`/api/accounts`). Borrar una tarjeta borra en cascada sus `statements` /
+`transactions` / `msi_plans` (`on delete cascade`); `recurring_charges.account_id`
+se pone en `null` en vez de borrarse (`on delete set null`). `issuer` y
+`last4` también son la referencia contra la que se valida cada PDF nuevo
+antes de guardarse — ver "Regla de aislamiento por mes" más abajo.
+
 ### `statements` — cada PDF subido
 Una fila por PDF procesado. Es el "expediente" de ese corte: fechas,
 montos resumen, y el JSON completo que devolvió el Skill (`raw_extraction`,
@@ -208,10 +216,15 @@ chat lee las últimas ~20 como contexto de cada nueva pregunta.
 ## Flujo de datos (de PDF a dashboard)
 
 ```
-Subes un PDF
+Subes un PDF (eligiendo a mano a qué tarjeta pertenece)
   → se guarda en Storage (bucket "statements", ruta {user_id}/{account_id}/...)
   → se crea una fila en `statements` (status: pending)
   → el Skill lee el PDF y regresa JSON (cuenta + statement + movimientos + planes MSI)
+  → se valida que el emisor/últimos 4 dígitos extraídos del PDF correspondan
+    a la tarjeta seleccionada (`src/lib/statement-account-match.ts`) — si no
+    coinciden, el statement se marca `error` y no se guarda nada más (evita
+    mezclar el PDF de una tarjeta con la cuenta de otra; ver incidente real
+    documentado abajo)
   → se actualiza la fila de `statements` (status: parsed, + raw_extraction)
   → se hace upsert de `msi_plans` (por account_id + concepto)
   → se insertan las filas en `transactions`

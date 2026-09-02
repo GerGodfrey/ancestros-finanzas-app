@@ -176,6 +176,19 @@ Si `finishReason === "max_tokens"` a pesar de este límite, `parseStatementPdf`
 lanza un error explícito sugiriendo cambiar de proveedor (Anthropic/Gemini
 soportan más salida) en vez del genérico "no devolvió JSON válido".
 
+**Después de que el modelo responde**, y antes de guardar cualquier dato, el
+`account` extraído del JSON se valida contra la tarjeta que el usuario
+seleccionó al subir el PDF (`checkStatementMatchesAccount()` en
+`src/lib/statement-account-match.ts`, llamado desde
+`/api/statements/[id]/parse`): compara emisor (con alias conocidos —
+"Amex"/"American Express", "Banamex"/"Citibanamex", etc. — para no bloquear
+por diferencias de redacción) y últimos 4 dígitos (comparación exacta, solo
+si la cuenta ya tiene uno guardado). Si no coinciden, el statement se marca
+`error` y no se toca `accounts`/`transactions`/`msi_plans` — evita que el
+PDF de una tarjeta quede mezclado con la cuenta de otra (ver incidente real
+en `docs/database-design.md`). El nombre del producto (`product_name`) no se
+valida porque lo asigna el usuario libremente, no el banco.
+
 ### 5.2 Insights + recomendaciones (`regenerateMonthlySummary`)
 
 Genera en **una sola llamada** las dos secciones del Resumen del Mes:

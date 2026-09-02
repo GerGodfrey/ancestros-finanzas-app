@@ -85,9 +85,11 @@ que quede en verde.**
 2. Configuración → agrega una API key (Anthropic, OpenAI, Gemini o
    DeepSeek — Gemini tiene un tier gratis permanente sin tarjeta, vía
    [Google AI Studio](https://aistudio.google.com/apikey), si quieres
-   probar sin gastar).
-3. Subir PDF → sube un estado de cuenta real → revisa que los movimientos y
-   planes MSI queden bien en el Dashboard.
+   probar sin gastar) y agrega/edita tus tarjetas.
+3. Subir PDF → elige la tarjeta correcta y sube un estado de cuenta real →
+   revisa que los movimientos y planes MSI queden bien en el Dashboard (si
+   el PDF no corresponde a la tarjeta seleccionada, el parseo se rechaza
+   con un error explícito en vez de guardarse en la cuenta equivocada).
 4. Dashboard → revisa Resumen / Desglose / Movimientos / Próximo Mes /
    Validación.
 5. Chat → pregúntale algo sobre un movimiento real.
