@@ -265,7 +265,7 @@ export async function getMonthlyDashboardData(
   const { data: parsedStatements } = await supabase
     .from("statements")
     .select(
-      "id, account_id, period_end, due_date, payment_no_interest, previous_balance, new_charges, interest_charged, raw_extraction",
+      "id, account_id, period_end, due_date, payment_no_interest, previous_balance, new_charges, interest_charged, raw_extraction, uploaded_at",
     )
     .eq("user_id", user.id)
     .eq("status", "parsed")
@@ -282,9 +282,36 @@ export async function getMonthlyDashboardData(
     targetMonth ?? firstOfMonth(parsedStatements[0].period_end as string);
   const monthPrefix = month.slice(0, 7);
 
-  const statementsInMonth = parsedStatements.filter(
+  const statementsInMonthRaw = parsedStatements.filter(
     (s) => s.period_end && monthKey(s.period_end as string) === monthPrefix,
   );
+
+  // Dos statements "parsed" de la misma tarjeta cayendo en el mismo mes casi
+  // siempre es el mismo PDF subido dos veces (ej. un intento falló y se
+  // reintentó, y el intento viejo también terminó quedando en 'parsed') — no
+  // dos cortes reales distintos. Si se dejan ambos, sus transacciones se
+  // suman dos veces en todo el dashboard (gasto, categorías, etc.), no solo
+  // se ve la tarjeta repetida en "Estado de Tarjetas". Nos quedamos con el
+  // más reciente (uploaded_at) por cuenta y avisamos en Validación.
+  const byAccount = new Map<string, typeof statementsInMonthRaw>();
+  for (const s of statementsInMonthRaw) {
+    const list = byAccount.get(s.account_id) ?? [];
+    list.push(s);
+    byAccount.set(s.account_id, list);
+  }
+  const statementsInMonth: typeof statementsInMonthRaw = [];
+  const duplicateStatementGroups: { accountId: string; dropped: typeof statementsInMonthRaw }[] = [];
+  for (const [accountId, list] of byAccount) {
+    if (list.length === 1) {
+      statementsInMonth.push(list[0]);
+      continue;
+    }
+    const sorted = [...list].sort((a, b) =>
+      (b.uploaded_at as string).localeCompare(a.uploaded_at as string),
+    );
+    statementsInMonth.push(sorted[0]);
+    duplicateStatementGroups.push({ accountId, dropped: sorted.slice(1) });
+  }
 
   // Regla dura: si no hay ni un statement parseado para el mes que se está
   // viendo, el dashboard no muestra nada de ese mes — ni siquiera paneles
@@ -635,6 +662,17 @@ export async function getMonthlyDashboardData(
 
   // --- Validación: avisos del Skill + checks de consistencia ---
   const validationIssues: ValidationIssue[] = [];
+  for (const group of duplicateStatementGroups) {
+    const label = accountLabel(group.accountId);
+    const droppedDates = group.dropped
+      .map((s) => new Date(s.uploaded_at as string).toLocaleDateString("es-MX"))
+      .join(", ");
+    validationIssues.push({
+      accountLabel: label,
+      message: `Se encontraron ${group.dropped.length + 1} estados de cuenta para este mes en esta tarjeta — se usó el más reciente y se ignoraron los subidos el ${droppedDates} para no contar el gasto dos veces. Si de verdad son cortes distintos (no un PDF duplicado), avisa para revisarlo.`,
+      severity: "warning",
+    });
+  }
   for (const s of statementsInMonth) {
     const label = accountLabel(s.account_id);
     const raw = s.raw_extraction as { warnings?: string[] } | null | undefined;
