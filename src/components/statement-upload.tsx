@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Account = {
@@ -12,6 +13,7 @@ type Account = {
 type Step = "idle" | "uploading" | "parsing" | "done" | "error";
 
 export function StatementUpload() {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState<string>("");
   const [newIssuer, setNewIssuer] = useState("");
@@ -93,6 +95,9 @@ export function StatementUpload() {
       );
       setWarnings(parseData.warnings ?? []);
       setFile(null);
+      // Refresca los paneles server-rendered de la página (pendientes del
+      // mes, historial) para que reflejen el statement recién parseado.
+      router.refresh();
     } catch (err) {
       setStep("error");
       setMessage(err instanceof Error ? err.message : "Error desconocido");
