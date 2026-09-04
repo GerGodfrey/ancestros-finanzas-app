@@ -1,0 +1,4 @@
+# Corre lo rápido antes de dejar salir el push: lint, tipos y unitarios
+# (~10s). El build y los e2e quedan para el CI, que sí puede tardar.
+# Para saltárselo en una emergencia: git push --no-verify
+npm run lint && npm run typecheck && npm test

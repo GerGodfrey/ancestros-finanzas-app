@@ -1,0 +1,282 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# No encimar corridas: si llega un push nuevo mientras corre uno viejo,
+# cancela el viejo. En la cadena de deploy esto importa — evita que dos
+# migraciones peleen por la misma base.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Validación — corre en PR y en push a main, todo en paralelo.
+  # ---------------------------------------------------------------------
+
+  lint-typecheck:
+    name: Lint y tipos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  unit:
+    name: Tests unitarios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    name: Build de producción
+    runs-on: ubuntu-latest
+    # Valores dummy a propósito: `next build` nunca habla con Supabase, esto
+    # solo satisface las lecturas de env para que el build sea hermético.
+    # Son los mismos de vitest.setup.ts — no hay secretos reales aquí.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example-test.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      ENCRYPTION_KEY: H0/tHg/89mQyZIZqNSpBpHpu3sDn/7MsC/cBmbaS880=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  e2e:
+    name: E2E (servidor local)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Cache de navegadores Playwright
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Instalar Playwright (navegador + deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Instalar solo deps del SO (navegador ya cacheado)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - run: npm run test:e2e
+
+  security:
+    name: Seguridad (gitleaks + audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks necesita el historial completo
+      - name: Escaneo de secretos
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      # Bloquea solo por críticas. Subir a --audit-level=high cuando el repo
+      # esté limpio (ver docs/deploy.md).
+      - name: npm audit
+        run: npm audit --audit-level=critical
+
+  # ---------------------------------------------------------------------
+  # Deploy — solo en push a main, y solo si TODO lo de arriba pasó.
+  # Si algún job falla, `needs` salta la cadena entera automáticamente.
+  # ---------------------------------------------------------------------
+
+  migrate-sandbox:
+    name: Migrar DB sandbox
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint-typecheck, unit, build, e2e, security]
+    runs-on: ubuntu-latest
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Enlazar proyecto sandbox
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SANDBOX_SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref ${{ secrets.SANDBOX_SUPABASE_PROJECT_REF }}
+      - name: Aplicar migraciones
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SANDBOX_SUPABASE_DB_PASSWORD }}
+        run: supabase db push
+
+  deploy-sandbox:
+    name: Deploy sandbox
+    needs: migrate-sandbox
+    runs-on: ubuntu-latest
+    environment:
+      name: sandbox
+      url: ${{ vars.SANDBOX_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_SANDBOX }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global vercel@latest
+      # `vercel pull` trae las variables del proyecto: NEXT_PUBLIC_SUPABASE_*
+      # y ENCRYPTION_KEY viven SOLO en Vercel, nunca en secrets de GitHub.
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  smoke-sandbox:
+    name: Smoke tests sandbox
+    needs: deploy-sandbox
+    runs-on: ubuntu-latest
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Cache de navegadores Playwright
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Instalar Playwright (navegador + deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Instalar solo deps del SO (navegador ya cacheado)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # Con PLAYWRIGHT_BASE_URL, playwright.config.ts no levanta servidor
+      # local y pega directo al deploy real.
+      - name: Smoke contra el sandbox desplegado
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.SANDBOX_URL }}
+        run: npm run test:e2e
+
+  migrate-production:
+    name: Migrar DB producción
+    needs: smoke-sandbox
+    runs-on: ubuntu-latest
+    # AQUÍ SE DETIENE: `production` tiene required reviewer. La aprobación se
+    # otorga una vez por corrida, así que los jobs de prod siguientes no
+    # vuelven a preguntar.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Enlazar proyecto de producción
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+      # SOLO ESQUEMA. Este repo es público y los artifacts de Actions en
+      # repos públicos los puede descargar cualquiera — un dump de datos
+      # publicaría todos los movimientos bancarios del usuario.
+      # El respaldo de DATOS se saca a mano ANTES de aprobar (ver
+      # docs/deploy.md), nunca desde aquí.
+      - name: Respaldo de esquema previo a migrar
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+        run: supabase db dump -f prod-schema-${{ github.sha }}.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prod-schema-${{ github.run_id }}
+          path: prod-schema-${{ github.sha }}.sql
+          retention-days: 30
+      - name: Aplicar migraciones
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+        run: supabase db push
+
+  deploy-production:
+    name: Deploy producción
+    needs: migrate-production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global vercel@latest
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  smoke-production:
+    name: Smoke tests producción
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Cache de navegadores Playwright
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Instalar Playwright (navegador + deps)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Instalar solo deps del SO (navegador ya cacheado)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Smoke contra producción
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ vars.PROD_URL }}
+        run: npm run test:e2e
