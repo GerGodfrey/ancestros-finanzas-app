@@ -69,7 +69,20 @@ const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 // en vez de fallar el parseo/chat completo por un pico de demanda momentáneo.
 const RETRYABLE_STATUS_CODES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
 const RETRYABLE_MESSAGE_RE =
-  /\b(429|500|502|503|504|529)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|rate.?limit/i;
+  /\b(429|500|502|503|504|529)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|rate.?limit|fetch failed/i;
+// Node's fetch (undici) lanza "TypeError: fetch failed" con la causa real
+// (ENOTFOUND, ECONNRESET, etc.) en err.cause — un corte de red momentáneo al
+// llamar al proveedor, tan transitorio como un 503, así que también reintenta.
+const RETRYABLE_NETWORK_CODES = new Set([
+  "ENOTFOUND",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "EPIPE",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
 
 function isRetryableError(err: unknown): boolean {
   const status = (err as { status?: number; statusCode?: number } | null)
@@ -83,7 +96,20 @@ function isRetryableError(err: unknown): boolean {
     return true;
   }
   const message = err instanceof Error ? err.message : String(err);
-  return RETRYABLE_MESSAGE_RE.test(message);
+  if (RETRYABLE_MESSAGE_RE.test(message)) return true;
+
+  const code = (err as { code?: string } | null)?.code;
+  if (code && RETRYABLE_NETWORK_CODES.has(code)) return true;
+
+  const cause = err instanceof Error ? err.cause : undefined;
+  if (cause) {
+    const causeCode = (cause as { code?: string } | null)?.code;
+    if (causeCode && RETRYABLE_NETWORK_CODES.has(causeCode)) return true;
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    if (RETRYABLE_MESSAGE_RE.test(causeMessage)) return true;
+  }
+
+  return false;
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {

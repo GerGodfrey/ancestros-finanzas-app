@@ -84,13 +84,21 @@ export async function POST(
   try {
     result = await parseStatementPdf({ provider, apiKey, pdfBuffer });
   } catch (err) {
+    // Sin esto, un fallo (ej. "fetch failed" por un corte de red) no deja
+    // ningún rastro server-side — el único registro era lo que el cliente
+    // alcanzaba a mostrar, insuficiente para diagnosticar después.
+    console.error(`[parse ${id}] falló:`, err);
     await supabase
       .from("statements")
       .update({ status: "error" })
       .eq("id", id);
+    const cause =
+      err instanceof Error && err.cause instanceof Error
+        ? ` (${err.cause.message})`
+        : "";
     return NextResponse.json(
       {
-        error: `Falló el parseo: ${err instanceof Error ? err.message : "error desconocido"}`,
+        error: `Falló el parseo: ${err instanceof Error ? err.message : "error desconocido"}${cause}`,
       },
       { status: 500 },
     );

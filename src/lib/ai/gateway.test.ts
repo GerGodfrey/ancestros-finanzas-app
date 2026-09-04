@@ -271,6 +271,33 @@ describe("gateway: chat", () => {
     vi.useRealTimers();
   });
 
+  it("reintenta cuando falla la conexión de red (fetch failed / ECONNRESET) y luego funciona", async () => {
+    // Node's fetch lanza TypeError("fetch failed") con la causa real (ej.
+    // ECONNRESET) en err.cause — mismo trato que un 503: transitorio, se
+    // reintenta.
+    vi.useFakeTimers();
+    const networkError = new TypeError("fetch failed");
+    (networkError as { cause?: unknown }).cause = Object.assign(
+      new Error("read ECONNRESET"),
+      { code: "ECONNRESET" },
+    );
+    geminiGenerateContentMock
+      .mockRejectedValueOnce(networkError)
+      .mockResolvedValueOnce({ text: "hola desde gemini" });
+
+    const resultPromise = chat({
+      provider: "gemini",
+      apiKey: "fake-key",
+      messages: [{ role: "user", content: "hola" }],
+    });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result.text).toBe("hola desde gemini");
+    expect(geminiGenerateContentMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it("no reintenta errores no transitorios (ej. API key inválida)", async () => {
     const authError = Object.assign(new Error("invalid api key"), {
       status: 401,
