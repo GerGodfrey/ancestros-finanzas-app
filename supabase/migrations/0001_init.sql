@@ -1,6 +1,6 @@
 -- Finanzas webapp — esquema inicial
 -- Todas las tablas de datos de usuario llevan user_id y quedan protegidas con RLS
--- (auth.uid() = user_id). Ver /Users/lggc/.claude/plans/compiled-petting-riddle.md
+-- (auth.uid() = user_id). Ver docs/architecture.md y docs/database-design.md
 -- para el contexto completo del diseño.
 
 create extension if not exists "pgcrypto";

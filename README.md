@@ -5,8 +5,7 @@ leen automáticamente con IA (Anthropic, OpenAI, Google Gemini o DeepSeek —
 a tu elección), y tienes un dashboard mensual + un chatbot que puede
 consultar todo tu historial real.
 
-Ver el plan de arquitectura completo en
-`/Users/lggc/.claude/plans/compiled-petting-riddle.md`.
+Ver la arquitectura completa en [`docs/architecture.md`](docs/architecture.md).
 
 ## Stack
 
@@ -64,7 +63,7 @@ Abre http://localhost:3000 — te manda a `/login`.
 ## 4. Tests
 
 ```bash
-npm run test:all   # lint + unit (Vitest) + build + e2e (Playwright) — el gate completo
+npm run test:all   # lint + tipos + unit (Vitest) + build + e2e (Playwright) — el gate completo
 npm run test       # solo unit tests (rápido, sin credenciales)
 npm run test:e2e   # solo smoke tests E2E (usan credenciales dummy, no pegan a Supabase real)
 ```
@@ -73,11 +72,16 @@ Los unit tests (`src/**/*.test.ts`) mockean los SDKs de los 4 proveedores
 (Anthropic, OpenAI, Gemini, DeepSeek) — no gastan API real. Los E2E de Playwright corren contra `next dev` con
 variables de entorno dummy y validan redirects de autenticación; **no**
 cubren el flujo real de login con Google ni el parseo real de un PDF —
-eso se prueba a mano (ver checklist abajo) hasta tener un proyecto Supabase
-de prueba dedicado a CI.
+eso se prueba a mano (ver checklist abajo) — para eso está el ambiente
+sandbox (ver [`docs/environments.md`](docs/environments.md)).
+
+Estos mismos specs de E2E se reusan como smoke tests contra cada deploy: el
+CI les pasa `PLAYWRIGHT_BASE_URL` y en vez de levantar un servidor local
+pegan a la URL ya publicada.
 
 **Antes de dar por terminado cualquier cambio, corre `npm run test:all` y
-que quede en verde.**
+que quede en verde.** Un hook de pre-push corre lint + tipos + unitarios
+automáticamente; el resto lo valida el CI.
 
 ## 5. Prueba manual end-to-end (con credenciales reales)
 
@@ -95,17 +99,25 @@ que quede en verde.**
    deben aparecer datos del mes que tenga un PDF procesado).
 5. Chat → pregúntale algo sobre un movimiento real.
 
-## 6. Deploy a Vercel
+## 6. Ambientes y deploy
 
-```bash
-npx vercel login       # abre el navegador para autenticarte — hazlo tú, no por mí
-npx vercel link
-npx vercel env add NEXT_PUBLIC_SUPABASE_URL production
-npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
-npx vercel env add ENCRYPTION_KEY production
-npx vercel --prod
-```
+Dos stacks completos y aislados, cada uno con su propio proyecto de Supabase y
+de Vercel:
 
-También agrega en Supabase Auth la URL de producción a "Redirect URLs"
-(`https://tu-dominio.vercel.app/auth/callback`) y en Google Cloud Console a
-los "Authorized redirect URIs".
+| | sandbox | producción |
+|---|---|---|
+| Para qué | Probar todo sin riesgo | Tus datos reales |
+| Se actualiza | Solo, en cada push a `main` | Promoción manual aprobada |
+
+No se deploya a mano: todo pasa por GitHub Actions. Un push a `main` corre la
+validación completa (lint, tipos, unitarios, build, e2e, seguridad), migra y
+deploya el sandbox, y ahí **se detiene esperando tu aprobación** antes de tocar
+producción.
+
+- **Cómo promover, hacer rollback o diagnosticar el pipeline** →
+  [`docs/deploy.md`](docs/deploy.md)
+- **Qué existe y dónde vive cada variable** →
+  [`docs/environments.md`](docs/environments.md)
+
+Antes de aprobar producción, el runbook exige respaldar los datos: Supabase en
+tier gratis no tiene backups automáticos.
