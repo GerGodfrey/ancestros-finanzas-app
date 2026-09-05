@@ -13,10 +13,13 @@ cuando algo cambia.
 |---|---|---|
 | Para qué | Probar todo: PDFs de prueba, migraciones nuevas, cambios de UI | Tus datos financieros reales |
 | Se actualiza | Automático en cada push a `main` | Promoción manual aprobada |
-| Proyecto Supabase | `finanzas-sandbox` · ref `_____` | `finanzas-prod` · ref `_____` |
-| URL Supabase | `https://_____.supabase.co` | `https://_____.supabase.co` |
-| Proyecto Vercel | `finanzas-app-sandbox` · id `_____` | `finanzas-app-prod` · id `_____` |
+| Proyecto Supabase | `finanzas-sandbox` · ref `wdeuoephxdszwluefybm` | ref `frptyythufguqbalosdo` |
+| URL Supabase | `https://wdeuoephxdszwluefybm.supabase.co` | `https://frptyythufguqbalosdo.supabase.co` |
+| Proyecto Vercel | `finanzas-app-sandbox` · id `prj_HWDPp6GQU8LUlefqZQ6rTCEmBJ1n` | `finanzas-app-prod` · id `prj_NPunntjv2LYfU5c2eyiEsN5qUjHp` |
 | URL pública | `https://finanzas-app-sandbox.vercel.app` | `https://finanzas-app-prod.vercel.app` |
+
+Equipo de Vercel: `gergodfreys-projects` · `orgId` `team_6fPVxrIPp8k6AyzTD79xfvMd` (el
+mismo para los dos proyectos).
 | GitHub Environment | `sandbox` (sin protección) | `production` (required reviewer) |
 | Quién aprueba | — | LGGC |
 
