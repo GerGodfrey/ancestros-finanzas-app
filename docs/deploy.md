@@ -83,6 +83,7 @@ justamente lo que queremos: arregla la migración con calma y vuelve a promover.
 | `security` (gitleaks) | **Posible secreto commiteado** | No lo ignores. Si es un falso positivo de un fixture, agrégalo a `.gitleaks.toml` por ruta. Si es real: rota ese secreto **antes** de tocar el historial |
 | `security` (audit) | Vulnerabilidad crítica | `npm audit` para ver cuál; `npm audit fix` si hay arreglo |
 | `migrate-*` | La migración no aplicó | Revisa el SQL contra el estado real de esa base; el deploy no corrió, no hay daño |
+| `migrate-*` con `Remote migration versions not found in local migrations directory` | La base tiene registradas migraciones que no existen en `supabase/migrations/` — pasa cuando alguien aplicó algo desde el dashboard, que las registra con versión de timestamp. `db push` se niega a avanzar así (no es cosmético) | Quítalas del registro con `supabase migration repair --status reverted <version> ...`. Solo borra filas de la tabla de control, no toca el esquema |
 | `smoke-*` | El deploy quedó roto | Rollback en Vercel (arriba) y diagnostica con calma |
 
 ## Crear un ambiente desde cero

@@ -67,6 +67,13 @@ gh run view <id> --log-failed
   Si el secreto es real: primero rotarlo, luego limpiar el historial.
 - `migrate-*` rojo ⇒ el deploy no corrió, no hay daño user-facing. Arregla el
   SQL contra el estado real de esa base.
+- `Remote migration versions not found in local migrations directory` ⇒ la base
+  registra migraciones que no están en `supabase/migrations/` (típicamente
+  aplicadas desde el dashboard, que usa versiones con timestamp). No es
+  cosmético: bloquea `db push`. Quítalas con
+  `supabase migration repair --status reverted <version> ...` — solo toca la
+  tabla de control, no el esquema. Antes de hacerlo, confirma que el esquema
+  real coincide con el que producen las migraciones locales.
 - `smoke-*` rojo ⇒ el deploy quedó publicado pero roto: rollback en Vercel
   ("Promote to Production" sobre el deployment anterior) y luego diagnostica.
 
