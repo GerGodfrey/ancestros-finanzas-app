@@ -18,16 +18,16 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
-    "@google/genai": "^2.15.0",
-    "@supabase/ssr": "^0.12.4",
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@google/genai": "^2.20.0",
+    "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.111.0",
     "ajv": "^8.20.0",
     "next": "^16.3.4",
-    "openai": "^7.2.0",
+    "openai": "^7.9.0",
     "pdf-parse": "^2.4.5",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "recharts": "^3.10.1",
     "three": "^0.185.1"
   },
@@ -38,13 +38,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.185.4",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9",
     "eslint-config-next": "^16.3.4",
     "husky": "^9.1.7",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
