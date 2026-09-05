@@ -7,7 +7,9 @@ useDefault = true
 description = "ENCRYPTION_KEY dummy de tests, commiteado a propósito para que la suite corra sin credenciales reales"
 # Se excluye POR RUTA, no por valor: si esa misma cadena apareciera en
 # cualquier otro archivo, gitleaks sí debe alertar.
+# Sin anclas (^...$) a propósito: gitleaks reporta la ruta de forma distinta
+# según cómo se invoque, y con anclas el allowlist no aplicaba.
 paths = [
-  '''^vitest\.setup\.ts$''',
-  '''^playwright\.config\.ts$''',
+  '''vitest\.setup\.ts''',
+  '''playwright\.config\.ts''',
 ]

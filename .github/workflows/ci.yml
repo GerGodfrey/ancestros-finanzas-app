@@ -28,8 +28,8 @@ jobs:
     name: Lint y tipos
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -41,8 +41,8 @@ jobs:
     name: Tests unitarios
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -54,33 +54,36 @@ jobs:
     runs-on: ubuntu-latest
     # Valores dummy a propósito: `next build` nunca habla con Supabase, esto
     # solo satisface las lecturas de env para que el build sea hermético.
-    # Son los mismos de vitest.setup.ts — no hay secretos reales aquí.
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example-test.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
-      ENCRYPTION_KEY: H0/tHg/89mQyZIZqNSpBpHpu3sDn/7MsC/cBmbaS880=
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      # Se genera al vuelo en vez de hardcodearla: al build solo le importa
+      # que sea base64 de 32 bytes, y así no hay ninguna cadena con pinta de
+      # secreto viviendo en el repo que haya que permitirle a gitleaks.
+      - name: Generar ENCRYPTION_KEY efímera
+        run: echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - run: npm run build
 
   e2e:
     name: E2E (servidor local)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Cache de navegadores Playwright
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -96,14 +99,17 @@ jobs:
     name: Seguridad (gitleaks + audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # gitleaks necesita el historial completo
       - name: Escaneo de secretos
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v4
+          # Sin esto la acción ignora el .gitleaks.toml del repo y usa su
+          # config por defecto, así que el allowlist no aplica.
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -125,8 +131,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: sandbox
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Enlazar proyecto sandbox
@@ -151,8 +157,8 @@ jobs:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_SANDBOX }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: npm install --global vercel@latest
@@ -168,15 +174,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: sandbox
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Cache de navegadores Playwright
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -202,8 +208,8 @@ jobs:
     # vuelven a preguntar.
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Enlazar proyecto de producción
@@ -221,7 +227,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
         run: supabase db dump -f prod-schema-${{ github.sha }}.sql
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: prod-schema-${{ github.run_id }}
           path: prod-schema-${{ github.sha }}.sql
@@ -243,8 +249,8 @@ jobs:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: npm install --global vercel@latest
@@ -258,15 +264,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Cache de navegadores Playwright
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
