@@ -126,7 +126,7 @@ jobs:
     environment: sandbox
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Enlazar proyecto sandbox
@@ -203,7 +203,7 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Enlazar proyecto de producción
