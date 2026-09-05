@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Salida de `vercel build` (funciones y assets ya compilados y
+    // minificados). Aparece al correr el build de Vercel en local.
+    ".vercel/**",
   ]),
 ]);
 
