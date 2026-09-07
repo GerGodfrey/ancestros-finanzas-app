@@ -21,6 +21,10 @@ export function AccountSettings() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Errores de editar/eliminar. Van aparte del `error` del formulario de
+  // alta, que se pinta hasta abajo: un fallo al borrar tiene que verse junto
+  // a la lista donde el usuario acaba de hacer clic.
+  const [listError, setListError] = useState<string | null>(null);
 
   const [newIssuer, setNewIssuer] = useState("");
   const [newProductName, setNewProductName] = useState("");
@@ -55,7 +59,7 @@ export function AccountSettings() {
 
   async function saveEdit(id: string) {
     setSavingEdit(true);
-    setError(null);
+    setListError(null);
 
     const res = await fetch("/api/accounts", {
       method: "PATCH",
@@ -72,7 +76,7 @@ export function AccountSettings() {
     setSavingEdit(false);
 
     if (!res.ok) {
-      setError(data.error ?? "Ocurrió un error al guardar los cambios.");
+      setListError(data.error ?? "Ocurrió un error al guardar los cambios.");
       return;
     }
 
@@ -82,9 +86,25 @@ export function AccountSettings() {
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
-    setConfirmDeleteId(null);
+    setListError(null);
+
+    // Borrar una tarjeta arrastra en cascada sus statements, transacciones y
+    // planes MSI. Si el DELETE falla, el usuario tiene que enterarse: quedarse
+    // callado hace ver la tarjeta en la lista y deja la duda de si el
+    // historial se fue o no.
+    const res = await fetch(`/api/accounts?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+
     setDeletingId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setListError(data.error ?? "No se pudo eliminar la tarjeta.");
+      return;
+    }
+
+    setConfirmDeleteId(null);
     await loadAccounts();
   }
 
@@ -125,6 +145,11 @@ export function AccountSettings() {
         <h2 className="mb-3 text-sm font-semibold text-zinc-200">
           Tus tarjetas
         </h2>
+        {listError && (
+          <p className="mb-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
+            {listError}
+          </p>
+        )}
         {loading ? (
           <p className="text-sm text-zinc-500">Cargando…</p>
         ) : accounts.length === 0 ? (
