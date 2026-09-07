@@ -98,10 +98,10 @@ paralelo, así que el feedback llega en menos de un minuto:
 | Job | Qué hace | Bloquea |
 |---|---|---|
 | Lint y tipos | `eslint` + `tsc --noEmit` | sí |
-| Tests unitarios | los 77 de Vitest, sin credenciales reales | sí |
+| Tests unitarios | los 87 de Vitest, sin credenciales reales | sí |
 | Build | `next build` con variables dummy, hermético | sí |
 | E2E local | Playwright contra un `next dev` propio | sí |
-| Seguridad | `gitleaks` + `npm audit` | solo secretos filtrados y vulnerabilidades críticas |
+| Seguridad | `gitleaks` + `npm audit` | solo secretos filtrados y vulnerabilidades altas/críticas |
 
 Un hook de **pre-push** (Husky) corre lint, tipos y unitarios en tu máquina
 antes de dejar salir el push: el mismo error, 10 segundos antes en vez de 3

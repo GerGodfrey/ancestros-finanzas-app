@@ -85,18 +85,15 @@ desechable.
 
 Hallazgos de la revisión que no eran parte del pipeline:
 
-- **IDOR en `POST /api/statements`**: acepta el `filePath` que manda el cliente
-  sin validar que empiece con el `user.id` de quien llama. Hoy solo lo detiene
-  la política RLS del bucket de Storage, sin defensa en profundidad en la ruta.
-  Merece una validación explícita y un test.
 - **Inyección de prompt**: el texto del PDF entra al modelo sin sanitizar
   (`parse-statement.ts:90-96` lo interpola directo para OpenAI/DeepSeek), y las
   `description` de transacciones se reusan en tres prompts más (categorizar,
   limpiar, insights). El schema de `ajv` acota el daño pero no lo elimina.
-- **Subir el gate de `npm audit`** de `--audit-level=critical` a `high` en
-  `.github/workflows/ci.yml`. Se dejó en `critical` para no bloquear por
-  hallazgos preexistentes; el repo ya está en 0 vulnerabilidades, así que
-  apretarlo ya no cuesta nada.
+- **`POST /api/statements` no valida que el `accountId` sea del usuario.** El
+  `filePath` ya se valida (`storage-path.ts`), pero el `account_id` entra tal
+  cual: se puede insertar un statement propio colgado de la cuenta de otro. El
+  daño es acotado — RLS impide leer esa cuenta, así que el parseo falla al
+  buscar el emisor — pero deja filas basura y merece el mismo trato.
 
 ---
 
@@ -108,9 +105,6 @@ Hallazgos de la revisión que no eran parte del pipeline:
   sin drama; los otros tres requieren probar que nada se rompa.
 - **`gitleaks-action@v2` corre sobre Node 20**, que GitHub ya marcó como
   deprecado. No hay v3 todavía; es aviso, no error. Revisar de vez en cuando.
-- **`handleDelete` en `account-settings.tsx`** ignora si el `DELETE` falla: no
-  muestra error al usuario. No rompe nada, pero es una falla silenciosa en el
-  botón que justamente borra datos en cascada.
 
 ---
 
