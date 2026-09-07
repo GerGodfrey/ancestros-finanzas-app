@@ -81,7 +81,7 @@ justamente lo que queremos: arregla la migración con calma y vuelve a promover.
 | `build` | El build de Next truena | `npm run build` en local |
 | `e2e` | Regresión en redirects/auth | `npm run test:e2e` en local |
 | `security` (gitleaks) | **Posible secreto commiteado** | No lo ignores. Si es un falso positivo de un fixture, agrégalo a `.gitleaks.toml` por ruta. Si es real: rota ese secreto **antes** de tocar el historial |
-| `security` (audit) | Vulnerabilidad crítica | `npm audit` para ver cuál; `npm audit fix` si hay arreglo |
+| `security` (audit) | Vulnerabilidad alta o crítica | `npm audit` para ver cuál; `npm audit fix` si hay arreglo |
 | `migrate-*` | La migración no aplicó | Revisa el SQL contra el estado real de esa base; el deploy no corrió, no hay daño |
 | `migrate-*` con `Remote migration versions not found in local migrations directory` | La base tiene registradas migraciones que no existen en `supabase/migrations/` — pasa cuando alguien aplicó algo desde el dashboard, que las registra con versión de timestamp. `db push` se niega a avanzar así (no es cosmético) | Quítalas del registro con `supabase migration repair --status reverted <version> ...`. Solo borra filas de la tabla de control, no toca el esquema |
 | `smoke-*` | El deploy quedó roto | Rollback en Vercel (arriba) y diagnostica con calma |
@@ -100,8 +100,10 @@ Vercel sin conectar Git → 3 variables → GitHub Environment con sus secrets.
   `vercel.json` la bloquea. Si algún día ves un deploy que Actions no disparó,
   alguien reconectó el repo — desconéctalo o el gate de aprobación deja de
   servir.
-- **`npm audit` hoy bloquea solo por críticas.** Cuando el repo esté limpio,
-  sube el gate a `--audit-level=high` en `.github/workflows/ci.yml`.
+- **`npm audit` bloquea por altas y críticas** (`--audit-level=high`). Si un
+  hallazgo alto no tiene arreglo disponible y bloquea un deploy urgente, no
+  bajes el gate: usa `npm audit --omit=dev` para saber si te afecta en runtime
+  y decide con eso.
 - **Los smoke tests son los mismos specs** de `e2e/`, apuntados a la URL
   desplegada con `PLAYWRIGHT_BASE_URL`. Cubren redirects sin sesión, no flujos
   autenticados.
