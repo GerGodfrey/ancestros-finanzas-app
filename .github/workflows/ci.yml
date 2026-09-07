@@ -103,7 +103,7 @@ jobs:
         with:
           fetch-depth: 0 # gitleaks necesita el historial completo
       - name: Escaneo de secretos
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Sin esto la acción ignora el .gitleaks.toml del repo y usa su
