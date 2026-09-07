@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isOwnedStatementPath } from "@/lib/storage-path";
 
 // Se llama después de que el archivo YA se subió a Supabase Storage desde el
 // navegador (bucket "statements", ruta statements/{user_id}/...). Aquí solo
@@ -20,6 +21,15 @@ export async function POST(request: Request) {
   if (!accountId || !filePath) {
     return NextResponse.json(
       { error: "accountId y filePath son requeridos" },
+      { status: 400 },
+    );
+  }
+
+  // El filePath lo elige el cliente: sin esto, cualquiera puede registrar una
+  // fila propia apuntando al PDF de otro usuario (ver `storage-path.ts`).
+  if (!isOwnedStatementPath(filePath, user.id)) {
+    return NextResponse.json(
+      { error: "Ruta de archivo inválida" },
       { status: 400 },
     );
   }

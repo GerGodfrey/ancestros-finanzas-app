@@ -114,10 +114,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      # Bloquea solo por críticas. Subir a --audit-level=high cuando el repo
-      # esté limpio (ver docs/deploy.md).
+      # Bloquea por altas y críticas. Estuvo en `critical` mientras había
+      # hallazgos preexistentes; el repo ya está en 0 vulnerabilidades, así que
+      # apretarlo no cuesta nada (ver docs/deploy.md).
       - name: npm audit
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   # ---------------------------------------------------------------------
   # Deploy — solo en push a main, y solo si TODO lo de arriba pasó.
