@@ -118,6 +118,8 @@ producción.
   [`docs/deploy.md`](docs/deploy.md)
 - **Qué existe y dónde vive cada variable** →
   [`docs/environments.md`](docs/environments.md)
+- **Qué quedó anotado y falta hacer** →
+  [`docs/pendientes.md`](docs/pendientes.md)
 
 Antes de aprobar producción, el runbook exige respaldar los datos: Supabase en
 tier gratis no tiene backups automáticos.
