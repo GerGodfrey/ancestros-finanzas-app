@@ -19,6 +19,7 @@ export default function SettingsPage() {
       </PageSection>
 
       <PageSection
+        id="tarjetas"
         title="Tarjetas"
         description="Edita el nombre de tus tarjetas, agrega nuevas o elimínalas. Eliminar una tarjeta borra también sus estados de cuenta y transacciones asociadas."
       >

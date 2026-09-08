@@ -9,11 +9,14 @@ import type { ReactNode } from "react";
  * sabe dónde termina una sección y empieza la siguiente.
  */
 export function PageSection({
+  id,
   title,
   description,
   children,
   first = false,
 }: {
+  /** Ancla para enlazar a esta sección desde otra página (/settings#tarjetas). */
+  id?: string;
   title: string;
   description?: string;
   children: ReactNode;
@@ -21,10 +24,12 @@ export function PageSection({
 }) {
   return (
     <section
+      id={id}
+      // Para que el título no quede pegado al borde superior al llegar por ancla.
       className={
         first
-          ? "mt-block"
-          : "mt-section border-t border-border pt-section"
+          ? "mt-block scroll-mt-8"
+          : "mt-section scroll-mt-8 border-t border-border pt-section"
       }
     >
       <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
