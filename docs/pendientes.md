@@ -5,6 +5,19 @@ aquí (el historial vive en git, no hace falta arrastrar una lista de "hechos").
 
 ---
 
+## Partir `dashboard-tabs.tsx`
+
+Son 1192 líneas con unos 15 componentes adentro (`Modal`, `DeleteRowButton`,
+`ResumenTab`, `MonthlyInsightsPanel`, `PanoramaDeDeudasPanel`…). Al tokenizar
+el diseño se le sacaron `Panel` y `Kpi` —que ahora viven en
+`src/components/ui/`— pero el resto sigue en un solo archivo.
+
+No se partió en el mismo cambio a propósito: mezclar un refactor estructural
+de ese tamaño con el cambio visual habría vuelto el diff irrevisable. Ahora
+que las primitivas existen, cada subcomponente se puede mover solo.
+
+---
+
 ## Respaldos de producción
 
 **Hoy no existe ningún respaldo de los datos financieros.** Supabase en plan
