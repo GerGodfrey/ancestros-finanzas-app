@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { decryptSecret } from "@/lib/crypto";
+import { CREDENTIAL_UNREADABLE, tryDecryptSecret } from "@/lib/crypto";
 import { parseStatementPdf } from "@/lib/ai/parse-statement";
 import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
 import { detectRecurringCharges } from "@/lib/recurring-charges";
@@ -77,7 +77,10 @@ export async function POST(
   }
 
   const pdfBuffer = Buffer.from(await fileBlob.arrayBuffer());
-  const apiKey = decryptSecret(credential.api_key_encrypted);
+  const apiKey = tryDecryptSecret(credential.api_key_encrypted);
+  if (!apiKey) {
+    return NextResponse.json({ error: CREDENTIAL_UNREADABLE }, { status: 409 });
+  }
   const provider = credential.provider as Provider;
 
   let result;

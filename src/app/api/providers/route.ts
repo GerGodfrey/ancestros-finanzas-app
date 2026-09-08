@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { encryptSecret, decryptSecret, maskApiKey } from "@/lib/crypto";
+import { encryptSecret, tryDecryptSecret, maskApiKey } from "@/lib/crypto";
 import { verifyApiKey, type Provider } from "@/lib/ai/gateway";
 
 const VALID_PROVIDERS: Provider[] = [
@@ -31,14 +31,20 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const providers = (data ?? []).map((row) => ({
-    id: row.id,
-    provider: row.provider,
-    isActive: row.is_active,
-    orchestratorEnabled: row.orchestrator_enabled,
-    createdAt: row.created_at,
-    maskedKey: maskApiKey(decryptSecret(row.api_key_encrypted)),
-  }));
+  const providers = (data ?? []).map((row) => {
+    // Una credencial ilegible se marca, no revienta: el resto de la lista
+    // tiene que seguir sirviendo para que el usuario pueda arreglarla.
+    const apiKey = tryDecryptSecret(row.api_key_encrypted);
+    return {
+      id: row.id,
+      provider: row.provider,
+      isActive: row.is_active,
+      orchestratorEnabled: row.orchestrator_enabled,
+      createdAt: row.created_at,
+      maskedKey: apiKey ? maskApiKey(apiKey) : null,
+      unreadable: apiKey === null,
+    };
+  });
 
   return NextResponse.json({ providers });
 }

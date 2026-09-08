@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { decryptSecret } from "@/lib/crypto";
+import { CREDENTIAL_UNREADABLE, tryDecryptSecret } from "@/lib/crypto";
 import { cleanDescriptionsInBatches } from "@/lib/ai/clean-descriptions";
 import type { Provider } from "@/lib/ai/gateway";
 
@@ -50,9 +50,14 @@ export async function POST() {
     );
   }
 
+  const apiKey = tryDecryptSecret(credential.api_key_encrypted);
+  if (!apiKey) {
+    return NextResponse.json({ error: CREDENTIAL_UNREADABLE }, { status: 409 });
+  }
+
   const { descriptionById, errors } = await cleanDescriptionsInBatches({
     provider: credential.provider as Provider,
-    apiKey: decryptSecret(credential.api_key_encrypted),
+    apiKey,
     transactions: pending.map((t) => ({ id: t.id, description: t.description })),
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui";
 
 type Provider = "anthropic" | "openai" | "gemini" | "deepseek";
 
@@ -9,9 +10,20 @@ type ProviderRow = {
   provider: Provider;
   isActive: boolean;
   orchestratorEnabled: boolean;
-  maskedKey: string;
+  maskedKey: string | null;
+  /** La key está guardada pero ya no se puede descifrar: hay que volver a capturarla. */
+  unreadable?: boolean;
   createdAt: string;
 };
+
+/** Lee la respuesta aunque el servidor haya devuelto un 500 sin cuerpo JSON. */
+async function readJson(res: Response): Promise<Record<string, unknown>> {
+  try {
+    return (await res.json()) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
 
 const PROVIDER_LABEL: Record<Provider, string> = {
   anthropic: "Anthropic (Claude)",
@@ -31,10 +43,28 @@ export function ProviderSettings() {
 
   async function loadProviders() {
     setLoading(true);
-    const res = await fetch("/api/providers");
-    const data = await res.json();
-    setProviders(data.providers ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/providers");
+      const data = await readJson(res);
+      if (!res.ok) {
+        setError(
+          (data.error as string) ??
+            "No se pudo cargar la lista de proveedores. Intenta recargar la página.",
+        );
+        setProviders([]);
+        return;
+      }
+      setError(null);
+      setProviders((data.providers as ProviderRow[]) ?? []);
+    } catch {
+      // Sin red, o el servidor no respondió.
+      setError("No se pudo contactar al servidor. Revisa tu conexión.");
+      setProviders([]);
+    } finally {
+      // En un finally a propósito: antes un fallo dejaba el "Cargando…" pegado
+      // para siempre, sin decir nunca qué había pasado.
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -52,12 +82,14 @@ export function ProviderSettings() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider, apiKey, orchestratorEnabled }),
     });
-    const data = await res.json();
+    const data = await readJson(res);
 
     setSaving(false);
 
     if (!res.ok) {
-      setError(data.error ?? "Ocurrió un error al guardar la credencial.");
+      setError(
+        (data.error as string) ?? "Ocurrió un error al guardar la credencial.",
+      );
       return;
     }
 
@@ -71,15 +103,19 @@ export function ProviderSettings() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-section">
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-200">
+        <h2 className="mb-tight text-2xs font-semibold uppercase tracking-[0.11em] text-text-faint">
           Tus proveedores de IA
         </h2>
         {loading ? (
-          <p className="text-sm text-zinc-500">Cargando…</p>
+          <p className="text-sm text-text-faint">Cargando…</p>
+        ) : error && providers.length === 0 ? (
+          <p className="rounded border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
+            {error}
+          </p>
         ) : providers.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-faint">
             Todavía no has configurado ningún proveedor.
           </p>
         ) : (
@@ -87,29 +123,35 @@ export function ProviderSettings() {
             {providers.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm"
+                className="flex items-center justify-between rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm"
               >
                 <div className="flex items-center gap-3">
-                  <span className="font-medium text-zinc-100">
+                  <span className="font-medium text-text">
                     {PROVIDER_LABEL[p.provider]}
                   </span>
-                  <span className="font-mono text-xs text-zinc-500">
-                    {p.maskedKey}
-                  </span>
+                  {p.unreadable ? (
+                    <span className="text-xs text-warning">
+                      No se puede leer — vuelve a guardarla abajo
+                    </span>
+                  ) : (
+                    <span className="font-mono text-xs text-text-faint">
+                      {p.maskedKey}
+                    </span>
+                  )}
                   {p.isActive && (
-                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                    <span className="rounded-full bg-positive/15 px-2 py-0.5 text-xs font-medium text-positive">
                       Activo
                     </span>
                   )}
                   {p.orchestratorEnabled && (
-                    <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-400">
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
                       Orquestador
                     </span>
                   )}
                 </div>
                 <button
                   onClick={() => handleDelete(p.id)}
-                  className="text-xs text-zinc-500 transition hover:text-red-400"
+                  className="text-xs text-text-faint transition hover:text-negative"
                 >
                   Eliminar
                 </button>
@@ -120,21 +162,21 @@ export function ProviderSettings() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-200">
+        <h2 className="mb-tight text-2xs font-semibold uppercase tracking-[0.11em] text-text-faint">
           Agregar / actualizar proveedor
         </h2>
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-4 rounded-lg border border-zinc-800 bg-zinc-900 p-5"
+          className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-5"
         >
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-zinc-400">
+            <label className="text-xs font-medium text-text-muted">
               Proveedor
             </label>
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value as Provider)}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
             >
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI</option>
@@ -144,7 +186,7 @@ export function ProviderSettings() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-zinc-400">
+            <label className="text-xs font-medium text-text-muted">
               API key
             </label>
             <input
@@ -153,34 +195,34 @@ export function ProviderSettings() {
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="sk-..."
               required
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
             />
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-text-faint">
               Se cifra antes de guardarse. Nunca se muestra completa de
               nuevo.
             </p>
           </div>
 
-          <label className="flex items-center gap-2 text-xs text-zinc-400">
+          <label className="flex items-center gap-2 text-xs text-text-muted">
             <input
               type="checkbox"
               checked={orchestratorEnabled}
               onChange={(e) => setOrchestratorEnabled(e.target.checked)}
-              className="rounded border-zinc-700 bg-zinc-950"
+              className="rounded border-border-strong bg-surface"
             />
             Modo orquestador (combinar este proveedor con otros para
             verificación cruzada)
           </label>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-negative">{error}</p>}
 
-          <button
+          <Button size="md" className="self-start"
             type="submit"
             disabled={saving}
-            className="self-start rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50"
+            
           >
             {saving ? "Guardando…" : "Guardar"}
-          </button>
+          </Button>
         </form>
       </section>
     </div>
