@@ -23,12 +23,15 @@ import {
   type TransactionCategory,
 } from "@/lib/transaction-categories";
 
+// `soon: true` deja la pestaña visible pero sin abrir. Se queda a la vista
+// —y no se borra— porque anunciar lo que viene es parte de la información;
+// esconderla haría que la sección simplemente no existiera para el usuario.
 const TABS = [
   { id: "resumen", label: "📊 Resumen del Mes" },
   { id: "desglose", label: "🧩 Desglose" },
   { id: "movimientos", label: "🧾 Movimientos Relevantes" },
   { id: "proximo", label: "📅 Próximo Mes" },
-  { id: "validacion", label: "🧮 Validación" },
+  { id: "validacion", label: "🧮 Validación", soon: true },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -135,26 +138,43 @@ export function DashboardTabs({ data }: { data: MonthlyDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${
-              tab === t.id
-                ? "border-text bg-text text-surface"
-                : "border-border bg-surface-raised text-text-muted hover:text-text"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const soon = "soon" in t && t.soon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              disabled={soon}
+              aria-disabled={soon || undefined}
+              onClick={() => !soon && setTab(t.id)}
+              title={soon ? "Todavía no está lista" : undefined}
+              className={`flex items-center gap-2 rounded border px-4 py-2 text-xs font-semibold transition-colors ${
+                soon
+                  ? "cursor-not-allowed border-border/60 bg-surface text-text-faint"
+                  : tab === t.id
+                    ? "border-text bg-text text-surface"
+                    : "border-border bg-surface-raised text-text-muted hover:text-text"
+              }`}
+            >
+              {/* El emoji va dentro del string del label, así que se atenúa
+                  junto con el texto: si no, queda a todo color y el botón no
+                  lee como deshabilitado. */}
+              <span className={soon ? "opacity-55" : undefined}>{t.label}</span>
+              {soon && (
+                <span className="rounded border border-border px-1.5 py-0.5 text-2xs font-medium uppercase tracking-[0.08em] text-text-faint">
+                  Próximamente
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "resumen" && <ResumenTab data={data} />}
       {tab === "desglose" && <DesgloseTab data={data} />}
       {tab === "movimientos" && <MovimientosTab data={data} />}
       {tab === "proximo" && <ProximoMesTab data={data} />}
-      {tab === "validacion" && <ValidacionTab data={data} />}
+
     </div>
   );
 }
@@ -1104,6 +1124,10 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+// Aparcado, no muerto: la pestaña que lo renderiza está marcada `soon` y
+// deshabilitada. Se queda aquí para que reactivarla sea quitar esa bandera y
+// volver a montar la línea en el switch de arriba, no reescribir el panel.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- ver TABS.soon
 function ValidacionTab({ data }: { data: MonthlyDashboardData }) {
   return (
     <Panel title="Avisos de validación del parseo">
