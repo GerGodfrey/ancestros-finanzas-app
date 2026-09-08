@@ -1,26 +1,285 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════
+   SISTEMA DE DISEÑO — documentado en docs/design-system.md
+
+   Dos temas: Papel (día) y Plano (noche). La misma dirección con dos
+   rampas, no dos diseños.
+
+   Las paletas se definen UNA vez, abajo, como --papel-* y --plano-*.
+   Después se asignan a los tokens activos (--surface, --text, …) en tres
+   bloques que cubren los tres estados reales del tema:
+
+     1. :root                      → Papel. El default.
+     2. @media prefers-color-scheme → Plano, cuando el sistema está oscuro
+                                      y el usuario no eligió Papel.
+     3. :root[data-theme="plano"]   → Plano, elegido explícitamente.
+
+   Cambiar un color = editar UN valor en la paleta. Las asignaciones de
+   abajo son mecánicas; no hay valores escondidos en ellas.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── PALETA PAPEL — el tema claro ─────────────────────────────────── */
+  --papel-surface:          oklch(97.5% 0.003 250);
+  --papel-surface-raised:   oklch(100% 0 0);
+  --papel-surface-raised-2: oklch(94.5% 0.004 250);
+  --papel-surface-sunk:     oklch(93% 0.005 250);
+  --papel-border:           oklch(89% 0.006 250);
+  --papel-border-strong:    oklch(82% 0.008 250);
+  --papel-text:             oklch(22% 0.012 255);
+  --papel-text-muted:       oklch(46% 0.010 255);
+  --papel-text-faint:       oklch(62% 0.008 255);
+  --papel-accent:           oklch(46% 0.13 250);
+  --papel-accent-ink:       oklch(98% 0.003 250);
+  --papel-positive:         oklch(45% 0.12 155);
+  --papel-negative:         oklch(53% 0.19 27);
+  --papel-warning:          oklch(52% 0.13 70);
+  --papel-scrim:            oklch(22% 0.012 255 / 0.38);
+
+  --papel-cat-comida:               oklch(58% 0.17 50);
+  --papel-cat-ropa:                 oklch(52% 0.19 10);
+  --papel-cat-transporte:           oklch(52% 0.14 235);
+  --papel-cat-hogar:                oklch(52% 0.15 148);
+  --papel-cat-entretenimiento:      oklch(52% 0.18 335);
+  --papel-cat-tech:                 oklch(50% 0.13 265);
+  --papel-cat-viaje:                oklch(56% 0.15 105);
+  --papel-cat-salud:                oklch(54% 0.11 190);
+  --papel-cat-intereses-comisiones: oklch(50% 0.20 27);
+  --papel-cat-otros:                oklch(56% 0.01 250);
+
+  /* ── PALETA PLANO — el tema oscuro ────────────────────────────────── */
+  --plano-surface:          oklch(16.5% 0.008 255);
+  --plano-surface-raised:   oklch(20.5% 0.009 255);
+  --plano-surface-raised-2: oklch(26% 0.010 255);
+  --plano-surface-sunk:     oklch(13.5% 0.008 255);
+  --plano-border:           oklch(28% 0.010 255);
+  --plano-border-strong:    oklch(34% 0.010 255);
+  --plano-text:             oklch(94% 0.004 255);
+  --plano-text-muted:       oklch(70% 0.009 255);
+  --plano-text-faint:       oklch(56% 0.009 255);
+  --plano-accent:           oklch(74% 0.12 250);
+  --plano-accent-ink:       oklch(16% 0.02 250);
+  --plano-positive:         oklch(76% 0.13 155);
+  --plano-negative:         oklch(72% 0.16 27);
+  --plano-warning:          oklch(80% 0.13 75);
+  --plano-scrim:            oklch(0% 0 0 / 0.68);
+
+  --plano-cat-comida:               oklch(72% 0.18 55);
+  --plano-cat-ropa:                 oklch(66% 0.19 12);
+  --plano-cat-transporte:           oklch(72% 0.13 220);
+  --plano-cat-hogar:                oklch(70% 0.17 145);
+  --plano-cat-entretenimiento:      oklch(70% 0.15 335);
+  --plano-cat-tech:                 oklch(68% 0.11 255);
+  --plano-cat-viaje:                oklch(80% 0.17 100);
+  --plano-cat-salud:                oklch(74% 0.13 175);
+  --plano-cat-intereses-comisiones: oklch(62% 0.21 27);
+  --plano-cat-otros:                oklch(60% 0.01 250);
+
+  /* ── ACTIVOS — Papel por defecto ──────────────────────────────────── */
+  --surface:          var(--papel-surface);
+  --surface-raised:   var(--papel-surface-raised);
+  --surface-raised-2: var(--papel-surface-raised-2);
+  --surface-sunk:     var(--papel-surface-sunk);
+  --border:           var(--papel-border);
+  --border-strong:    var(--papel-border-strong);
+  --text:             var(--papel-text);
+  --text-muted:       var(--papel-text-muted);
+  --text-faint:       var(--papel-text-faint);
+  --accent:           var(--papel-accent);
+  --accent-ink:       var(--papel-accent-ink);
+  --positive:         var(--papel-positive);
+  --negative:         var(--papel-negative);
+  --warning:          var(--papel-warning);
+  --scrim:            var(--papel-scrim);
+
+  --cat-comida:               var(--papel-cat-comida);
+  --cat-ropa:                 var(--papel-cat-ropa);
+  --cat-transporte:           var(--papel-cat-transporte);
+  --cat-hogar:                var(--papel-cat-hogar);
+  --cat-entretenimiento:      var(--papel-cat-entretenimiento);
+  --cat-tech:                 var(--papel-cat-tech);
+  --cat-viaje:                var(--papel-cat-viaje);
+  --cat-salud:                var(--papel-cat-salud);
+  --cat-intereses-comisiones: var(--papel-cat-intereses-comisiones);
+  --cat-otros:                var(--papel-cat-otros);
+
+  color-scheme: light;
+
+  /* ── Radio ────────────────────────────────────────────────────────── */
+  --radius: 2px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Sistema en oscuro y sin elección explícita de Papel. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="papel"]) {
+    --surface:          var(--plano-surface);
+    --surface-raised:   var(--plano-surface-raised);
+    --surface-raised-2: var(--plano-surface-raised-2);
+    --surface-sunk:     var(--plano-surface-sunk);
+    --border:           var(--plano-border);
+    --border-strong:    var(--plano-border-strong);
+    --text:             var(--plano-text);
+    --text-muted:       var(--plano-text-muted);
+    --text-faint:       var(--plano-text-faint);
+    --accent:           var(--plano-accent);
+    --accent-ink:       var(--plano-accent-ink);
+    --positive:         var(--plano-positive);
+    --negative:         var(--plano-negative);
+    --warning:          var(--plano-warning);
+    --scrim:            var(--plano-scrim);
+
+    --cat-comida:               var(--plano-cat-comida);
+    --cat-ropa:                 var(--plano-cat-ropa);
+    --cat-transporte:           var(--plano-cat-transporte);
+    --cat-hogar:                var(--plano-cat-hogar);
+    --cat-entretenimiento:      var(--plano-cat-entretenimiento);
+    --cat-tech:                 var(--plano-cat-tech);
+    --cat-viaje:                var(--plano-cat-viaje);
+    --cat-salud:                var(--plano-cat-salud);
+    --cat-intereses-comisiones: var(--plano-cat-intereses-comisiones);
+    --cat-otros:                var(--plano-cat-otros);
+
+    color-scheme: dark;
   }
 }
 
+/* Plano elegido a mano. Gana sobre un sistema en claro. */
+:root[data-theme="plano"] {
+  --surface:          var(--plano-surface);
+  --surface-raised:   var(--plano-surface-raised);
+  --surface-raised-2: var(--plano-surface-raised-2);
+  --surface-sunk:     var(--plano-surface-sunk);
+  --border:           var(--plano-border);
+  --border-strong:    var(--plano-border-strong);
+  --text:             var(--plano-text);
+  --text-muted:       var(--plano-text-muted);
+  --text-faint:       var(--plano-text-faint);
+  --accent:           var(--plano-accent);
+  --accent-ink:       var(--plano-accent-ink);
+  --positive:         var(--plano-positive);
+  --negative:         var(--plano-negative);
+  --warning:          var(--plano-warning);
+  --scrim:            var(--plano-scrim);
+
+  --cat-comida:               var(--plano-cat-comida);
+  --cat-ropa:                 var(--plano-cat-ropa);
+  --cat-transporte:           var(--plano-cat-transporte);
+  --cat-hogar:                var(--plano-cat-hogar);
+  --cat-entretenimiento:      var(--plano-cat-entretenimiento);
+  --cat-tech:                 var(--plano-cat-tech);
+  --cat-viaje:                var(--plano-cat-viaje);
+  --cat-salud:                var(--plano-cat-salud);
+  --cat-intereses-comisiones: var(--plano-cat-intereses-comisiones);
+  --cat-otros:                var(--plano-cat-otros);
+
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PUENTE A TAILWIND
+   Cada token de arriba se vuelve una utilidad: bg-surface, text-muted,
+   border-border, text-positive, bg-cat-comida, font-display, text-2xs…
+   ═══════════════════════════════════════════════════════════════════════ */
+@theme inline {
+  --color-surface:          var(--surface);
+  --color-surface-raised:   var(--surface-raised);
+  --color-surface-raised-2: var(--surface-raised-2);
+  --color-surface-sunk:     var(--surface-sunk);
+  --color-border:           var(--border);
+  --color-border-strong:    var(--border-strong);
+  --color-text:             var(--text);
+  --color-text-muted:       var(--text-muted);
+  --color-text-faint:       var(--text-faint);
+  --color-accent:           var(--accent);
+  --color-accent-ink:       var(--accent-ink);
+  --color-positive:         var(--positive);
+  --color-negative:         var(--negative);
+  --color-warning:          var(--warning);
+  --color-scrim:            var(--scrim);
+
+  --color-cat-comida:               var(--cat-comida);
+  --color-cat-ropa:                 var(--cat-ropa);
+  --color-cat-transporte:           var(--cat-transporte);
+  --color-cat-hogar:                var(--cat-hogar);
+  --color-cat-entretenimiento:      var(--cat-entretenimiento);
+  --color-cat-tech:                 var(--cat-tech);
+  --color-cat-viaje:                var(--cat-viaje);
+  --color-cat-salud:                var(--cat-salud);
+  --color-cat-intereses-comisiones: var(--cat-intereses-comisiones);
+  --color-cat-otros:                var(--cat-otros);
+
+  /* Archivo para display e interfaz, Geist Mono para cifras. */
+  --font-display: var(--font-archivo);
+  --font-sans:    var(--font-archivo);
+  --font-mono:    var(--font-geist-mono);
+
+  /* Escala de 8 pasos. --text-2xs es el piso: nada baja de 11px. */
+  --text-2xs:                 0.6875rem;  /* 11    */
+  --text-2xs--line-height:    1.45;
+  --text-xs:                  0.78125rem; /* 12.5  */
+  --text-xs--line-height:     1.45;
+  --text-sm:                  0.875rem;   /* 14    */
+  --text-sm--line-height:     1.5;
+  --text-base:                1rem;       /* 16    */
+  --text-base--line-height:   1.6;
+  --text-lg:                  1.25rem;    /* 20    */
+  --text-lg--line-height:     1.35;
+  --text-xl:                  1.5625rem;  /* 25    */
+  --text-xl--line-height:     1.2;
+  --text-2xl:                 1.875rem;   /* 30    */
+  --text-2xl--line-height:    1.1;
+  --text-display:             clamp(2.5rem, 7vw, 5.25rem);
+  --text-display--line-height: 0.9;
+
+  /* Ritmo de espaciado. Van en el namespace --spacing-* de Tailwind, que es
+     lo que genera utilidades reales (mt-section, py-block, gap-tight). Escribir
+     mt-[--space-section] NO funciona en Tailwind 4: produce
+     `margin-top: --space-section`, CSS inválido que el navegador descarta. */
+  --spacing-section: 3.5rem;
+  --spacing-block:   1.375rem;
+  --spacing-tight:   0.75rem;
+
+  /* Casi a escuadra en todo. rounded-full sigue siendo píldora: lo usa el
+     interruptor de tema, que tiene que verse como un interruptor. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════════ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Toda cifra de dinero alinea sus decimales. */
+.tabular {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El foco de teclado siempre visible. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
