@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui";
 
 const ENDPOINT_BY_KIND = {
   income: "/api/incomes",
@@ -45,14 +46,14 @@ export function BudgetQuickAdd({ month }: { month: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-zinc-800 bg-zinc-900 p-4"
+      className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface-raised p-4"
     >
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-zinc-400">Tipo</label>
+        <label className="text-xs text-text-muted">Tipo</label>
         <select
           value={kind}
           onChange={(e) => setKind(e.target.value as "income" | "fixed" | "debt")}
-          className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+          className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-text"
         >
           <option value="income">Ingreso/Ganancia</option>
           <option value="fixed">Egreso/Gasto</option>
@@ -60,46 +61,46 @@ export function BudgetQuickAdd({ month }: { month: string }) {
         </select>
       </div>
       <div className="flex flex-1 flex-col gap-1">
-        <label className="text-xs text-zinc-400">Concepto</label>
+        <label className="text-xs text-text-muted">Concepto</label>
         <input
           value={concept}
           onChange={(e) => setConcept(e.target.value)}
           placeholder={
             kind === "income" ? "Nómina" : kind === "fixed" ? "Renta" : "Cripto (prestado)"
           }
-          className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+          className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-text"
         />
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-zinc-400">Monto</label>
+        <label className="text-xs text-text-muted">Monto</label>
         <input
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+          className="w-32 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-text"
         />
       </div>
       {kind !== "debt" && (
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-400">Recurrencia</label>
+          <label className="text-xs text-text-muted">Recurrencia</label>
           <select
             value={isRecurring ? "recurring" : "temporary"}
             onChange={(e) => setIsRecurring(e.target.value === "recurring")}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100"
+            className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm text-text"
           >
             <option value="temporary">Temporal (solo este mes)</option>
             <option value="recurring">Fijo (este mes en adelante)</option>
           </select>
         </div>
       )}
-      <button
+      <Button size="sm"
         type="submit"
         disabled={saving}
-        className="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+        
       >
         {saving ? "Guardando…" : "Agregar"}
-      </button>
+      </Button>
     </form>
   );
 }

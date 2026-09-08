@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui";
 
 type Message = { id?: string; role: "user" | "assistant"; content: string };
 
@@ -56,10 +57,10 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-[70vh] flex-col rounded-lg border border-zinc-800 bg-zinc-900">
+    <div className="flex h-[70vh] flex-col rounded-lg border border-border bg-surface-raised">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-text-faint">
             Pregúntame algo sobre tus movimientos, tarjetas o gasto del mes —
             ej. &ldquo;¿cuánto gasté en restaurantes en julio?&rdquo; o
             &ldquo;¿qué planes MSI tengo activos?&rdquo;
@@ -70,15 +71,15 @@ export function ChatPanel() {
             key={m.id ?? idx}
             className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
               m.role === "user"
-                ? "ml-auto bg-violet-600 text-white"
-                : "bg-zinc-800 text-zinc-100"
+                ? "ml-auto bg-accent text-text"
+                : "bg-surface-raised-2 text-text"
             }`}
           >
             {m.content}
           </div>
         ))}
         {sending && (
-          <div className="max-w-[85%] rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-400">
+          <div className="max-w-[85%] rounded-lg bg-surface-raised-2 px-3 py-2 text-sm text-text-muted">
             Pensando…
           </div>
         )}
@@ -86,28 +87,28 @@ export function ChatPanel() {
       </div>
 
       {error && (
-        <p className="border-t border-zinc-800 px-4 py-2 text-xs text-red-400">
+        <p className="border-t border-border px-4 py-2 text-xs text-negative">
           {error}
         </p>
       )}
 
       <form
         onSubmit={handleSend}
-        className="flex items-center gap-2 border-t border-zinc-800 p-3"
+        className="flex items-center gap-2 border-t border-border p-3"
       >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Escribe tu pregunta…"
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          className="flex-1 rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
         />
-        <button
+        <Button size="md"
           type="submit"
           disabled={sending || !input.trim()}
-          className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 disabled:opacity-50"
+          
         >
           Enviar
-        </button>
+        </Button>
       </form>
     </div>
   );

@@ -13,19 +13,25 @@ import {
   YAxis,
 } from "recharts";
 import type { MonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
-import { CATEGORY_COLOR, CATEGORY_LABEL } from "@/lib/transaction-categories";
+import {
+  CATEGORY_COLOR,
+  categoryLabelWithEmoji,
+} from "@/lib/transaction-categories";
 
 const money = (n: number) =>
   n.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 
+// Las tarjetas se pintan con los mismos tokens que las categorías, en vez de
+// con una tercera paleta paralela. Recharts los acepta porque terminan como
+// atributos SVG, así que cambian con el tema igual que todo lo demás.
 const CARD_COLORS = [
-  "#7C3AED",
-  "#14B8A6",
-  "#3B82F6",
-  "#10B981",
-  "#F97316",
-  "#EC4899",
-  "#6366F1",
+  "var(--cat-transporte)",
+  "var(--cat-viaje)",
+  "var(--cat-hogar)",
+  "var(--cat-comida)",
+  "var(--cat-ropa)",
+  "var(--cat-salud)",
+  "var(--cat-tech)",
 ];
 
 function ChartTooltip({
@@ -37,10 +43,10 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-md border border-border-strong bg-surface-raised px-3 py-2 text-xs shadow-lg">
       {payload.map((p, idx) => (
-        <div key={idx} className="text-zinc-200">
-          {p.name}: <span className="font-semibold">{money(p.value)}</span>
+        <div key={idx} className="text-text">
+          {p.name}: <span className="font-mono font-semibold tabular-nums">{money(p.value)}</span>
         </div>
       ))}
     </div>
@@ -49,13 +55,13 @@ function ChartTooltip({
 
 export function FlujoDelMesChart({ data }: { data: MonthlyDashboardData }) {
   const rows = [
-    { name: "Ingreso Total", value: data.ingresoTotal, color: "#34D399" },
-    { name: "Egreso Total", value: data.egresoTotal, color: "#F87171" },
-    { name: "Gasto Tarjetas", value: data.gastoTarjetas, color: "#60A5FA" },
+    { name: "Ingreso Total", value: data.ingresoTotal, color: "var(--positive)" },
+    { name: "Egreso Total", value: data.egresoTotal, color: "var(--negative)" },
+    { name: "Gasto Tarjetas", value: data.gastoTarjetas, color: "var(--accent)" },
     {
       name: "Balance del Mes",
       value: data.balance,
-      color: data.balance >= 0 ? "#34D399" : "#F87171",
+      color: data.balance >= 0 ? "var(--positive)" : "var(--negative)",
     },
   ];
 
@@ -64,18 +70,18 @@ export function FlujoDelMesChart({ data }: { data: MonthlyDashboardData }) {
       <BarChart data={rows} layout="vertical" margin={{ left: 24 }}>
         <XAxis
           type="number"
-          stroke="#6B7589"
-          tick={{ fill: "#6B7589", fontSize: 11 }}
+          stroke="var(--text-faint)"
+          tick={{ fill: "var(--text-faint)", fontSize: 11 }}
           tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`}
         />
         <YAxis
           type="category"
           dataKey="name"
-          stroke="#6B7589"
-          tick={{ fill: "#B0BAC9", fontSize: 12 }}
+          stroke="var(--text-faint)"
+          tick={{ fill: "var(--text-muted)", fontSize: 12 }}
           width={110}
         />
-        <Tooltip content={<ChartTooltip />} cursor={{ fill: "#1C2231" }} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-raised-2)" }} />
         <Bar dataKey="value" radius={[0, 6, 6, 0]}>
           {rows.map((r, idx) => (
             <Cell key={idx} fill={r.color} />
@@ -92,9 +98,9 @@ export function IngresosVsEgresosManualesChart({
   data: MonthlyDashboardData;
 }) {
   const rows = [
-    { name: "Ingresos", value: data.ingresoTotal, color: "#34D399" },
-    { name: "Egresos Manuales", value: data.egresoDebito, color: "#F59E0B" },
-    { name: "Gasto Tarjetas", value: data.gastoTarjetas, color: "#60A5FA" },
+    { name: "Ingresos", value: data.ingresoTotal, color: "var(--positive)" },
+    { name: "Egresos Manuales", value: data.egresoDebito, color: "var(--warning)" },
+    { name: "Gasto Tarjetas", value: data.gastoTarjetas, color: "var(--accent)" },
   ];
 
   return (
@@ -102,18 +108,18 @@ export function IngresosVsEgresosManualesChart({
       <BarChart data={rows} layout="vertical" margin={{ left: 24 }}>
         <XAxis
           type="number"
-          stroke="#6B7589"
-          tick={{ fill: "#6B7589", fontSize: 11 }}
+          stroke="var(--text-faint)"
+          tick={{ fill: "var(--text-faint)", fontSize: 11 }}
           tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`}
         />
         <YAxis
           type="category"
           dataKey="name"
-          stroke="#6B7589"
-          tick={{ fill: "#B0BAC9", fontSize: 12 }}
+          stroke="var(--text-faint)"
+          tick={{ fill: "var(--text-muted)", fontSize: 12 }}
           width={120}
         />
-        <Tooltip content={<ChartTooltip />} cursor={{ fill: "#1C2231" }} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--surface-raised-2)" }} />
         <Bar dataKey="value" radius={[0, 6, 6, 0]}>
           {rows.map((r, idx) => (
             <Cell key={idx} fill={r.color} />
@@ -130,7 +136,7 @@ export function GastoPorTarjetaChart({ data }: { data: MonthlyDashboardData }) {
     .map((c) => ({ name: `${c.issuer} ${c.productName}`, value: c.gasto ?? 0 }));
 
   if (rows.length === 0) {
-    return <p className="text-sm text-zinc-500">Sin gasto de tarjetas este mes.</p>;
+    return <p className="text-sm text-text-faint">Sin gasto de tarjetas este mes.</p>;
   }
 
   return (
@@ -143,7 +149,7 @@ export function GastoPorTarjetaChart({ data }: { data: MonthlyDashboardData }) {
           innerRadius={60}
           outerRadius={95}
           paddingAngle={2}
-          stroke="#0B0F17"
+          stroke="var(--surface-raised)"
           strokeWidth={2}
         >
           {rows.map((_, idx) => (
@@ -152,8 +158,8 @@ export function GastoPorTarjetaChart({ data }: { data: MonthlyDashboardData }) {
         </Pie>
         <Tooltip content={<ChartTooltip />} />
         <Legend
-          wrapperStyle={{ fontSize: 12, color: "#B0BAC9" }}
-          formatter={(value) => <span style={{ color: "#B0BAC9" }}>{value}</span>}
+          wrapperStyle={{ fontSize: 12, color: "var(--text-muted)" }}
+          formatter={(value) => <span style={{ color: "var(--text-muted)" }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -163,14 +169,14 @@ export function GastoPorTarjetaChart({ data }: { data: MonthlyDashboardData }) {
 export function GastoPorCategoriaChart({ data }: { data: MonthlyDashboardData }) {
   if (data.categoryBreakdown.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-text-faint">
         Sin movimientos categorizados este mes todavía.
       </p>
     );
   }
 
   const rows = data.categoryBreakdown.map((c) => ({
-    name: CATEGORY_LABEL[c.category],
+    name: categoryLabelWithEmoji(c.category),
     value: c.amount,
   }));
 
@@ -184,7 +190,7 @@ export function GastoPorCategoriaChart({ data }: { data: MonthlyDashboardData })
           innerRadius={55}
           outerRadius={90}
           paddingAngle={2}
-          stroke="#0B0F17"
+          stroke="var(--surface-raised)"
           strokeWidth={2}
         >
           {data.categoryBreakdown.map((c, idx) => (
@@ -196,12 +202,12 @@ export function GastoPorCategoriaChart({ data }: { data: MonthlyDashboardData })
           layout="vertical"
           align="right"
           verticalAlign="middle"
-          wrapperStyle={{ fontSize: 11, color: "#B0BAC9" }}
+          wrapperStyle={{ fontSize: 11, color: "var(--text-muted)" }}
           formatter={(value: string, entry: { payload?: { value?: number } }) => {
             const amount = entry.payload?.value ?? 0;
             return (
-              <span style={{ color: "#B0BAC9" }}>
-                {value} — <span style={{ color: "#F1F5F9", fontWeight: 600 }}>{money(amount)}</span>
+              <span style={{ color: "var(--text-muted)" }}>
+                {value} — <span style={{ color: "var(--text)", fontWeight: 600 }}>{money(amount)}</span>
               </span>
             );
           }}

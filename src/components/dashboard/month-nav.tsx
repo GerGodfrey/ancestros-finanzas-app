@@ -50,14 +50,14 @@ export function MonthNav({
         onClick={() => prevMonth && goTo(prevMonth)}
         disabled={!prevMonth}
         aria-label="Mes anterior"
-        className="rounded-md border border-zinc-800 px-2 py-1 text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-30"
+        className="rounded-md border border-border px-2 py-1 text-text-muted transition hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-30"
       >
         ‹
       </button>
       <select
         value={currentMonth}
         onChange={(e) => goTo(e.target.value)}
-        className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+        className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text"
       >
         {availableMonths
           .slice()
@@ -72,7 +72,7 @@ export function MonthNav({
         onClick={() => nextMonth && goTo(nextMonth)}
         disabled={!nextMonth}
         aria-label="Mes siguiente"
-        className="rounded-md border border-zinc-800 px-2 py-1 text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-30"
+        className="rounded-md border border-border px-2 py-1 text-text-muted transition hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-30"
       >
         ›
       </button>

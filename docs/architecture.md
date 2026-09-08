@@ -4,7 +4,9 @@ Vista de conjunto de todo el proyecto. Los dos documentos hermanos entran en
 profundidad donde este solo resume: [`ai-models.md`](./ai-models.md) para la
 capa de IA y [`database-design.md`](./database-design.md) para el esquema y
 las reglas de datos. Para ambientes y despliegue:
-[`environments.md`](./environments.md) y [`deploy.md`](./deploy.md).
+[`environments.md`](./environments.md) y [`deploy.md`](./deploy.md). Para cómo se
+ve y por qué: [`design-system.md`](./design-system.md), y
+[`design-prompts.md`](./design-prompts.md) para pedir trabajo visual nuevo.
 
 ## Qué es
 

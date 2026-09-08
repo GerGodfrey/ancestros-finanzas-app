@@ -16,9 +16,30 @@ export const BILL_DENOMINATIONS: BillDenomination[] = [
   { value: 500, colorA: "#7a4a12", colorB: "#c98a34", accent: "#4a2c0a" },
 ];
 
+// Paleta de grabado para el tema Papel.
+//
+// Sobre blanco, los billetes a color no funcionan: van semitransparentes, así
+// que al encimarse se multiplican en parches marrones, y su papel crema se ve
+// sucio contra un blanco frío. En monocromo y opacos leen como lo que son —
+// una marca de agua, papel moneda visto al trasluz — y los traslapes dejan de
+// ensuciar porque todas las tintas son del mismo tono.
+//
+// Los grises varían apenas entre denominaciones para que no se lea plano.
+export const BILL_DENOMINATIONS_MONO: BillDenomination[] = [
+  { value: 20, colorA: "#bcc4ce", colorB: "#dbe0e7", accent: "#a3acb8" },
+  { value: 50, colorA: "#b7bfca", colorB: "#d8dde5", accent: "#9da6b3" },
+  { value: 100, colorA: "#b2bac6", colorB: "#d4dae2", accent: "#98a1af" },
+  { value: 200, colorA: "#c1c8d2", colorB: "#dee3e9", accent: "#a8b1bc" },
+  { value: 500, colorA: "#b9c1cb", colorB: "#d9dee5", accent: "#a0a9b6" },
+];
+
 const WIDTH = 660;
 const HEIGHT = 300;
-const PAPER = "#efe6ce";
+
+/** El papel del billete real: crema. Para Plano. */
+export const PAPER_WARM = "#efe6ce";
+/** Papel frío, apenas por debajo de --surface, para que el grabado se note. */
+export const PAPER_COOL = "#eaeef3";
 
 function roundedRectPath(
   ctx: CanvasRenderingContext2D,
@@ -50,7 +71,10 @@ function addPaperGrain(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.putImageData(imageData, 0, 0);
 }
 
-export function createBillTexture(denomination: BillDenomination): THREE.CanvasTexture {
+export function createBillTexture(
+  denomination: BillDenomination,
+  paper: string = PAPER_WARM,
+): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -61,7 +85,7 @@ export function createBillTexture(denomination: BillDenomination): THREE.CanvasT
   ctx.clip();
 
   // Base de "papel"
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = paper;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   // Tinta de color aplicada sobre el papel (multiply = se ve impresa, no plástica)

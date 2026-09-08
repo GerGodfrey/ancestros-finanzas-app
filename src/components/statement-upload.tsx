@@ -1,58 +1,87 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui";
 
 type Account = {
   id: string;
   issuer: string;
   product_name: string;
+  last4: string | null;
 };
 
 type Step = "idle" | "uploading" | "parsing" | "done" | "error";
 
+/** "Palacio de Hierro — Platinum ···· 6280". Sin los últimos 4, dos tarjetas
+ *  del mismo emisor son indistinguibles en el selector. */
+function accountLabel(a: Account): string {
+  const base = `${a.issuer} — ${a.product_name}`;
+  return a.last4 ? `${base} ···· ${a.last4}` : base;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isPdf(f: File): boolean {
+  return f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+}
+
 export function StatementUpload() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // Arranca vacío a propósito: preseleccionar la primera tarjeta hacía que un
+  // PDF se subiera contra una cuenta que nadie eligió.
   const [accountId, setAccountId] = useState<string>("");
-  const [newIssuer, setNewIssuer] = useState("");
-  const [newProduct, setNewProduct] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [step, setStep] = useState<Step>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   async function loadAccounts() {
-    const res = await fetch("/api/accounts");
-    const data = await res.json();
-    setAccounts(data.accounts ?? []);
-    if (data.accounts?.[0] && !accountId) {
-      setAccountId(data.accounts[0].id);
+    try {
+      const res = await fetch("/api/accounts");
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      setLoadError(false);
+      setAccounts(data.accounts ?? []);
+    } catch {
+      // Distinguir "no tienes tarjetas" de "no pudimos preguntar" importa: lo
+      // primero manda al usuario a crear una, lo segundo sería mentirle.
+      setLoadError(true);
+      setAccounts([]);
+    } finally {
+      setLoadingAccounts(false);
     }
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch inicial al montar, patrón intencional
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch inicial al montar, patrón intencional (igual que provider-settings)
     loadAccounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleCreateAccount() {
-    if (!newIssuer.trim() || !newProduct.trim()) return;
-    const res = await fetch("/api/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ issuer: newIssuer, productName: newProduct }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setNewIssuer("");
-      setNewProduct("");
-      await loadAccounts();
-      setAccountId(data.account.id);
+  function acceptFile(f: File | null) {
+    if (!f) return;
+    // `accept` solo filtra el diálogo del sistema; un archivo arrastrado se
+    // cuela igual, así que la validación tiene que estar aquí.
+    if (!isPdf(f)) {
+      setFileError(`«${f.name}» no es un PDF. Solo se aceptan estados de cuenta en PDF.`);
+      return;
     }
+    setFileError(null);
+    setFile(f);
   }
+
+  const busy = step === "uploading" || step === "parsing";
 
   async function handleUpload() {
     if (!file || !accountId) return;
@@ -104,91 +133,168 @@ export function StatementUpload() {
     }
   }
 
-  return (
-    <div className="flex flex-col gap-6 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-zinc-400">Tarjeta</label>
-        {accounts.length > 0 ? (
-          <select
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.issuer} — {a.product_name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <p className="text-xs text-zinc-500">
-            Todavía no tienes tarjetas registradas — crea una abajo.
+  if (!loadingAccounts && loadError) {
+    return (
+      <div className="rounded border border-negative/40 bg-negative/10 p-5 text-sm text-negative">
+        No se pudo cargar tu lista de tarjetas. Recarga la página para volver a
+        intentarlo.
+      </div>
+    );
+  }
+
+  // Sin tarjetas no hay nada que subir: el formulario no sirve, así que en su
+  // lugar va la salida hacia donde sí se puede resolver.
+  if (!loadingAccounts && accounts.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-block rounded border border-border bg-surface-raised p-5">
+        <div>
+          <p className="text-sm font-medium text-text">
+            Todavía no tienes ninguna tarjeta registrada.
           </p>
-        )}
+          <p className="mt-1 max-w-[62ch] text-sm text-text-muted">
+            Necesitas al menos una para saber a qué cuenta pertenece el estado
+            que vas a subir.
+          </p>
+        </div>
+        <Link href="/settings#tarjetas">
+          <Button size="md">Agregar una tarjeta</Button>
+        </Link>
       </div>
+    );
+  }
 
-      <div className="flex items-end gap-2 border-t border-zinc-800 pt-4">
-        <div className="flex flex-1 flex-col gap-1.5">
-          <label className="text-xs font-medium text-zinc-400">
-            Emisor (ej. Banamex)
-          </label>
-          <input
-            value={newIssuer}
-            onChange={(e) => setNewIssuer(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-          />
-        </div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <label className="text-xs font-medium text-zinc-400">
-            Producto (ej. Explora)
-          </label>
-          <input
-            value={newProduct}
-            onChange={(e) => setNewProduct(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-          />
-        </div>
-        <button
-          onClick={handleCreateAccount}
-          className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800"
+  return (
+    <div className="flex flex-col gap-block rounded border border-border bg-surface-raised p-5">
+      <div className="flex flex-col gap-tight">
+        <label
+          htmlFor="statement-account"
+          className="text-2xs font-semibold uppercase tracking-[0.11em] text-text-faint"
         >
-          Agregar tarjeta
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-1.5 border-t border-zinc-800 pt-4">
-        <label className="text-xs font-medium text-zinc-400">
-          PDF del estado de cuenta
+          Tarjeta
         </label>
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm text-zinc-300"
-        />
+        <select
+          id="statement-account"
+          value={accountId}
+          disabled={loadingAccounts || busy}
+          onChange={(e) => setAccountId(e.target.value)}
+          className="rounded border border-border-strong bg-surface px-3 py-2 text-sm text-text disabled:opacity-50"
+        >
+          <option value="" disabled={accountId !== ""}>
+            {loadingAccounts ? "Cargando tarjetas…" : "Seleccionar tarjeta…"}
+          </option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {accountLabel(a)}
+            </option>
+          ))}
+        </select>
+
+        <p className="flex items-start gap-2 text-xs text-text-faint">
+          <span aria-hidden="true" className="leading-[1.45]">
+            ⓘ
+          </span>
+          <span>
+            ¿No ves tu tarjeta? Agrégala en{" "}
+            <Link
+              href="/settings#tarjetas"
+              className="text-accent underline underline-offset-2"
+            >
+              Configuración → Tarjetas
+            </Link>
+            .
+          </span>
+        </p>
       </div>
 
-      <button
+      <div className="flex flex-col gap-tight border-t border-border pt-block">
+        <span className="text-2xs font-semibold uppercase tracking-[0.11em] text-text-faint">
+          PDF del estado de cuenta
+        </span>
+
+        {/*
+          El <input> va con `sr-only`, no con `display:none`: escondiéndolo del
+          todo se pierde el foco de teclado, y entonces la zona solo funciona
+          con ratón. Envuelto en <label>, el área completa queda clicable y
+          `Tab` + `Enter` abren el diálogo sin JavaScript de por medio.
+        */}
+        <label
+          onDragOver={(e) => {
+            // Sin esto el navegador abre el PDF en una pestaña nueva en vez
+            // de entregárnoslo.
+            e.preventDefault();
+            if (!busy) setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (!busy) acceptFile(e.dataTransfer.files?.[0] ?? null);
+          }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded border border-dashed px-6 py-10 text-center transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent ${
+            dragging
+              ? "border-accent bg-accent/5"
+              : "border-border-strong hover:border-accent hover:bg-surface-raised-2"
+          } ${busy ? "pointer-events-none opacity-50" : ""}`}
+        >
+          <input
+            type="file"
+            accept="application/pdf"
+            disabled={busy}
+            onChange={(e) => acceptFile(e.target.files?.[0] ?? null)}
+            className="sr-only"
+          />
+          <span className="text-sm font-medium text-text">
+            Arrastra aquí el PDF, o haz clic para elegirlo
+          </span>
+          <span className="text-xs text-text-faint">
+            Un archivo PDF por estado de cuenta
+          </span>
+        </label>
+
+        {file && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-border bg-surface-sunk px-3 py-2">
+            <span className="min-w-0 text-sm text-text">
+              <span className="break-all font-medium">{file.name}</span>{" "}
+              <span className="font-mono text-xs text-text-faint tabular-nums">
+                {formatSize(file.size)}
+              </span>
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => setFile(null)}
+            >
+              Quitar
+            </Button>
+          </div>
+        )}
+
+        {fileError && <p className="text-sm text-negative">{fileError}</p>}
+      </div>
+
+      <Button
+        size="md"
+        className="self-start"
         onClick={handleUpload}
-        disabled={!file || !accountId || step === "uploading" || step === "parsing"}
-        className="self-start rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50"
+        disabled={!file || !accountId || busy}
       >
         {step === "uploading"
           ? "Subiendo…"
           : step === "parsing"
             ? "Leyendo el PDF con IA…"
             : "Subir y procesar"}
-      </button>
+      </Button>
 
       {message && (
         <p
-          className={`text-sm ${step === "error" ? "text-red-400" : "text-emerald-400"}`}
+          className={`text-sm ${step === "error" ? "text-negative" : "text-positive"}`}
         >
           {message}
         </p>
       )}
       {warnings.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+        <div className="rounded border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
           <p className="mb-1 font-semibold">Avisos del parseo:</p>
           <ul className="list-inside list-disc">
             {warnings.map((w, i) => (

@@ -15,32 +15,40 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center overflow-hidden bg-[#12141e] px-6 sm:px-12 lg:px-24">
+    <main className="relative flex min-h-screen items-center overflow-hidden bg-surface px-6 sm:px-12 lg:px-24">
       <BillsBackground />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#12141e]/70 via-transparent to-[#12141e]/80" />
+
+      {/*
+        Antes esto era un halo `rounded-[3rem] blur-3xl` detrás del texto —
+        una mancha cuyo único trabajo era despegarlo del fondo. Ahora el
+        contraste lo da una máscara direccional sobre el canvas: opaca donde
+        vive el texto, transparente donde los billetes tienen que verse.
+      */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(72%_128%_at_10%_50%,var(--surface)_0%,var(--surface)_34%,color-mix(in_oklab,var(--surface)_66%,transparent)_58%,transparent_80%)]"
+      />
 
       <div className="relative z-10 mx-auto w-full max-w-xl">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -inset-x-10 -inset-y-16 -z-10 rounded-[3rem] bg-[#12141e]/55 blur-3xl"
-        />
-        <h1 className="font-thin leading-[0.85] tracking-[0.02em] text-white">
-          <span className="block text-5xl sm:text-6xl md:text-7xl">Tus finanzas</span>
-          <span className="block text-5xl sm:text-6xl md:text-7xl">en calma.</span>
+        <h1 className="font-display text-display font-extralight leading-[0.9] tracking-[-0.025em] text-text [font-stretch:112%]">
+          <span className="block">Tus finanzas</span>
+          <span className="block">en calma.</span>
         </h1>
 
-        <p className="mt-6 max-w-md text-base leading-[1.6em] tracking-[0.02em] text-zinc-300">
+        <p className="mt-8 max-w-[38ch] text-base leading-relaxed text-text-muted">
           Tu dashboard financiero personal: historial de movimientos,
           categorías automáticas y un asistente que entiende tus finanzas.
         </p>
 
-        <div className="mt-8 h-[2px] w-full max-w-[420px] bg-white" />
+        <div className="mt-10 h-px w-full max-w-[420px] bg-accent" />
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex max-w-[420px] justify-end">
           <button
+            type="button"
             onClick={handleGoogleLogin}
-            className="flex items-center gap-3 rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-900 shadow-lg shadow-black/40 transition hover:bg-zinc-200"
+            className="inline-flex items-center gap-3 rounded bg-text px-5 py-3 text-xs font-semibold uppercase tracking-[0.06em] text-surface transition-colors hover:bg-text-muted"
           >
+            {/* El logo de Google es contenido de marca ajena: no cambia con el tema. */}
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
               <path
                 fill="#4285F4"

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { decryptSecret } from "@/lib/crypto";
+import { CREDENTIAL_UNREADABLE, tryDecryptSecret } from "@/lib/crypto";
 import { regenerateMonthlySummary } from "@/lib/ai/monthly-insights";
 import type { Provider } from "@/lib/ai/gateway";
 
@@ -39,13 +39,18 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const apiKey = tryDecryptSecret(credential.api_key_encrypted);
+  if (!apiKey) {
+    return NextResponse.json({ error: CREDENTIAL_UNREADABLE }, { status: 409 });
+  }
+
 
   try {
     const summary = await regenerateMonthlySummary({
       supabase,
       userId: user.id,
       provider: credential.provider as Provider,
-      apiKey: decryptSecret(credential.api_key_encrypted),
+      apiKey,
       month,
     });
     return NextResponse.json({

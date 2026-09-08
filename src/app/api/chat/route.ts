@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { decryptSecret } from "@/lib/crypto";
+import { CREDENTIAL_UNREADABLE, tryDecryptSecret } from "@/lib/crypto";
 import { runAgent, type ChatMessage, type Provider } from "@/lib/ai/gateway";
 import { CHATBOT_TOOLS, createChatbotToolExecutor } from "@/lib/ai/chatbot-tools";
 
@@ -93,7 +93,10 @@ export async function POST(request: Request) {
     { role: "user", content: userMessage },
   ];
 
-  const apiKey = decryptSecret(credential.api_key_encrypted);
+  const apiKey = tryDecryptSecret(credential.api_key_encrypted);
+  if (!apiKey) {
+    return NextResponse.json({ error: CREDENTIAL_UNREADABLE }, { status: 409 });
+  }
   const provider = credential.provider as Provider;
   const executeTool = createChatbotToolExecutor(supabase, user.id);
 
