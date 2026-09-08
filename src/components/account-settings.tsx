@@ -19,6 +19,9 @@ export function AccountSettings() {
   const [editIssuer, setEditIssuer] = useState("");
   const [editProductName, setEditProductName] = useState("");
   const [editLast4, setEditLast4] = useState("");
+  // Los valores con los que se abrió la edición, para saber qué cambió de
+  // verdad y solo alertar entonces.
+  const [editOriginal, setEditOriginal] = useState<AccountRow | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -29,8 +32,6 @@ export function AccountSettings() {
 
   const [newIssuer, setNewIssuer] = useState("");
   const [newProductName, setNewProductName] = useState("");
-  const [newLast4, setNewLast4] = useState("");
-  const [newCreditLimit, setNewCreditLimit] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,7 @@ export function AccountSettings() {
 
   function startEdit(account: AccountRow) {
     setEditingId(account.id);
+    setEditOriginal(account);
     setEditIssuer(account.issuer);
     setEditProductName(account.product_name);
     setEditLast4(account.last4 ?? "");
@@ -56,6 +58,7 @@ export function AccountSettings() {
 
   function cancelEdit() {
     setEditingId(null);
+    setEditOriginal(null);
   }
 
   async function saveEdit(id: string) {
@@ -82,6 +85,7 @@ export function AccountSettings() {
     }
 
     setEditingId(null);
+    setEditOriginal(null);
     await loadAccounts();
   }
 
@@ -117,11 +121,12 @@ export function AccountSettings() {
     const res = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // Ni `last4` ni `creditLimit`: el parser los saca del PDF y los escribe
+      // en la cuenta en cada subida. Pedirlos a mano aquí solo abría la puerta
+      // a un typo que después rechaza el primer PDF culpando al archivo.
       body: JSON.stringify({
         issuer: newIssuer,
         productName: newProductName,
-        last4: newLast4.trim() || null,
-        creditLimit: newCreditLimit ? Number(newCreditLimit) : null,
       }),
     });
     const data = await res.json();
@@ -135,8 +140,6 @@ export function AccountSettings() {
 
     setNewIssuer("");
     setNewProductName("");
-    setNewLast4("");
-    setNewCreditLimit("");
     await loadAccounts();
   }
 
@@ -199,6 +202,46 @@ export function AccountSettings() {
                         />
                       </div>
                     </div>
+                    {/*
+                      La alerta solo aparece cuando algo cambió de verdad, y
+                      sube de tono si tocaron el emisor o los últimos 4: esos
+                      dos son la guardia que usa el parser para verificar que
+                      un PDF pertenece a esta tarjeta.
+                    */}
+                    {(() => {
+                      const issuerChanged =
+                        editIssuer.trim() !== (editOriginal?.issuer ?? "").trim();
+                      const last4Changed =
+                        editLast4.trim() !== (editOriginal?.last4 ?? "").trim();
+                      if (!issuerChanged && !last4Changed) return null;
+                      return (
+                        <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                          <p className="font-semibold">
+                            {last4Changed
+                              ? "Vas a cambiar los últimos 4 dígitos"
+                              : "Vas a cambiar el emisor"}
+                          </p>
+                          <p className="mt-1 leading-relaxed">
+                            El emisor y los últimos 4 son lo que usamos para
+                            comprobar que un PDF pertenece a esta tarjeta antes
+                            de importarlo. Si dejas un valor que no coincide con
+                            lo que dice tu estado de cuenta,{" "}
+                            <strong className="font-semibold">
+                              las próximas subidas se van a rechazar
+                            </strong>
+                            . Los movimientos que ya importaste no se tocan.
+                          </p>
+                          {last4Changed && (
+                            <p className="mt-1 leading-relaxed">
+                              Además, la próxima vez que subas un PDF que traiga
+                              los últimos 4, este valor se reemplaza por el del
+                              banco.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex gap-2">
                       <Button variant="primary" size="sm"
                         onClick={() => saveEdit(a.id)}
@@ -302,31 +345,15 @@ export function AccountSettings() {
                 className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                Últimos 4 dígitos (opcional)
-              </label>
-              <input
-                value={newLast4}
-                onChange={(e) => setNewLast4(e.target.value)}
-                maxLength={4}
-                placeholder="1234"
-                className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                Límite de crédito (opcional)
-              </label>
-              <input
-                type="number"
-                value={newCreditLimit}
-                onChange={(e) => setNewCreditLimit(e.target.value)}
-                placeholder="50000"
-                className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
-              />
-            </div>
           </div>
+
+          <p className="flex items-start gap-2 text-xs text-text-faint">
+            <span aria-hidden="true" className="leading-[1.45]">ⓘ</span>
+            <span>
+              Los últimos 4 dígitos, el límite de crédito y las tasas se leen
+              del PDF la primera vez que subas un estado de cuenta.
+            </span>
+          </p>
 
           {error && <p className="text-xs text-negative">{error}</p>}
 

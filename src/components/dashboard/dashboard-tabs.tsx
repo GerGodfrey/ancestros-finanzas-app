@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
   MonthlyDashboardData,
   RelevantTransaction,
 } from "@/lib/dashboard/get-monthly-data";
 import { BudgetQuickAdd } from "./budget-quick-add";
-import { Badge, Button, Panel, Stat } from "@/components/ui";
+import { Badge, Button, Modal, Panel, Stat } from "@/components/ui";
 import {
   FlujoDelMesChart,
   GastoPorCategoriaChart,
@@ -75,48 +75,6 @@ function DeleteRowButton({ endpoint, id }: { endpoint: string; id: string }) {
     >
       ✕
     </button>
-  );
-}
-
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4"
-      onClick={onClose}
-    >
-      <div
-        className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-surface-raised p-5 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-sm font-semibold text-text">{title}</h2>
-          <button
-            onClick={onClose}
-            className="shrink-0 text-text-faint hover:text-text"
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }
 

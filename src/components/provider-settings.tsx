@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
+import { PROVIDER_GUIDES } from "@/lib/ai/provider-guides";
 
 type Provider = "anthropic" | "openai" | "gemini" | "deepseek";
 
@@ -40,6 +41,7 @@ export function ProviderSettings() {
   const [orchestratorEnabled, setOrchestratorEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   async function loadProviders() {
     setLoading(true);
@@ -138,10 +140,22 @@ export function ProviderSettings() {
                       {p.maskedKey}
                     </span>
                   )}
-                  {p.isActive && (
-                    <span className="rounded-full bg-positive/15 px-2 py-0.5 text-xs font-medium text-positive">
-                      Activo
+                  {/*
+                    "Activo" describe la fila en la base, pero una credencial
+                    que no descifra no puede atender ni una llamada. Decir
+                    "Activo" ahí es decirle al usuario que todo está bien
+                    mientras nada funciona, así que el estado ilegible manda.
+                  */}
+                  {p.unreadable ? (
+                    <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                      Necesita atención
                     </span>
+                  ) : (
+                    p.isActive && (
+                      <span className="rounded-full bg-positive/15 px-2 py-0.5 text-xs font-medium text-positive">
+                        Activo
+                      </span>
+                    )
                   )}
                   {p.orchestratorEnabled && (
                     <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
@@ -170,10 +184,23 @@ export function ProviderSettings() {
           className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-5"
         >
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-muted">
-              Proveedor
-            </label>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <label
+                htmlFor="provider-select"
+                className="text-xs font-medium text-text-muted"
+              >
+                Proveedor
+              </label>
+              <button
+                type="button"
+                onClick={() => setGuideOpen(true)}
+                className="text-xs text-accent underline underline-offset-2"
+              >
+                ¿Cómo consigo mi API key de {PROVIDER_LABEL[provider]}?
+              </button>
+            </div>
             <select
+              id="provider-select"
               value={provider}
               onChange={(e) => setProvider(e.target.value as Provider)}
               className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
@@ -225,6 +252,55 @@ export function ProviderSettings() {
           </Button>
         </form>
       </section>
+
+      {guideOpen && (
+        <Modal
+          title={`Cómo obtener tu API key de ${PROVIDER_LABEL[provider]}`}
+          onClose={() => setGuideOpen(false)}
+        >
+          {(() => {
+            const g = PROVIDER_GUIDES[provider];
+            if (!g) return null;
+            return (
+              <div className="flex flex-col gap-block text-sm text-text-muted">
+                <ol className="flex list-decimal flex-col gap-2 pl-5 leading-relaxed">
+                  {g.steps.map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+
+                <p className="flex items-start gap-2 rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning">
+                  <span aria-hidden="true" className="leading-[1.45]">⚠️</span>
+                  <span>{g.billing}</span>
+                </p>
+
+                <p className="text-xs">
+                  La key empieza con{" "}
+                  <code className="rounded border border-border bg-surface-sunk px-1.5 py-0.5 font-mono text-text">
+                    {g.keyPrefix}
+                  </code>
+                  . Si la tuya no, probablemente copiaste solo una parte.
+                </p>
+
+                <p className="text-xs">
+                  Aquí se cifra antes de guardarse y nunca se vuelve a mostrar
+                  completa. Puedes revocarla desde el mismo panel del proveedor
+                  cuando quieras.
+                </p>
+
+                <a
+                  href={g.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="self-start"
+                >
+                  <Button size="md">Abrir {g.urlLabel} ↗</Button>
+                </a>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 }

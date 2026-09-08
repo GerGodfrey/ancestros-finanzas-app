@@ -11,15 +11,8 @@ export default function SettingsPage() {
       </h1>
 
       <PageSection
-        first
-        title="Apariencia"
-        description="Elige si quieres la app en claro u oscuro. Si no eliges, sigue el tema de tu sistema."
-      >
-        <ThemeToggle />
-      </PageSection>
-
-      <PageSection
         id="tarjetas"
+        first
         title="Tarjetas"
         description="Edita el nombre de tus tarjetas, agrega nuevas o elimínalas. Eliminar una tarjeta borra también sus estados de cuenta y transacciones asociadas."
       >
@@ -31,6 +24,12 @@ export default function SettingsPage() {
         description="Elige qué modelo de IA quieres usar para leer tus estados de cuenta y para el chatbot, y conecta tu propia API key."
       >
         <ProviderSettings />
+      </PageSection>
+      <PageSection
+        title="Apariencia"
+        description="Elige si quieres la app en claro u oscuro. Si no eliges, sigue el tema de tu sistema."
+      >
+        <ThemeToggle />
       </PageSection>
     </main>
   );
