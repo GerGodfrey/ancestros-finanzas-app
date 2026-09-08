@@ -30,19 +30,19 @@ export function PendingThisMonth({ data }: { data: MonthCoverage | null }) {
     <div
       className={`rounded-lg border p-4 text-sm ${
         allDone
-          ? "border-emerald-500/30 bg-emerald-500/10"
-          : "border-amber-500/30 bg-amber-500/10"
+          ? "border-positive/30 bg-positive/10"
+          : "border-warning/30 bg-warning/10"
       }`}
     >
       <p
-        className={`font-semibold ${allDone ? "text-emerald-300" : "text-amber-300"}`}
+        className={`font-semibold ${allDone ? "text-positive" : "text-warning"}`}
       >
         {allDone
           ? `Ya subiste todos los estados de cuenta de ${longLabel(data.month)} (${data.uploadedCount}/${data.expectedCount}).`
           : `Te falta subir ${missing.length} de ${data.expectedCount} estados de cuenta de ${longLabel(data.month)}.`}
       </p>
       {!allDone && (
-        <ul className="mt-2 list-inside list-disc text-amber-200/90">
+        <ul className="mt-2 list-inside list-disc text-warning">
           {missing.map((a) => (
             <li key={a.accountId}>
               {a.issuer} — {a.productName}

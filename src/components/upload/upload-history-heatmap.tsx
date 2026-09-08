@@ -51,12 +51,20 @@ function shortDate(dateStr: string): string {
 // Escala secuencial de un solo tono (verde) por magnitud, del mismo lenguaje
 // visual que un heatmap de contribuciones: entre más oscuro/vacío, menos
 // estados de cuenta subidos ese mes contra las tarjetas que existían.
+// Rampa de cobertura. Se expresa como opacidad sobre --positive en vez de
+// tonos fijos de emerald: así el orden perceptual (más lleno = más intenso)
+// se mantiene sobre papel y sobre negro. Con emerald-900 fijo, en Papel el
+// sentido se invertía — el paso "casi vacío" quedaba más oscuro que el lleno.
 function levelClasses(percentage: number | null): { bg: string; text: string } {
-  if (percentage === null) return { bg: "bg-zinc-900 border border-zinc-800", text: "text-zinc-600" };
-  if (percentage === 0) return { bg: "bg-zinc-800", text: "text-zinc-500" };
-  if (percentage < 0.5) return { bg: "bg-emerald-900", text: "text-emerald-200" };
-  if (percentage < 1) return { bg: "bg-emerald-700", text: "text-emerald-50" };
-  return { bg: "bg-emerald-400", text: "text-zinc-900" };
+  if (percentage === null)
+    return { bg: "border border-border bg-surface-raised", text: "text-text-faint" };
+  if (percentage === 0)
+    return { bg: "bg-surface-raised-2", text: "text-text-faint" };
+  if (percentage < 0.5)
+    return { bg: "bg-positive/25", text: "text-positive" };
+  if (percentage < 1)
+    return { bg: "bg-positive/55", text: "text-text" };
+  return { bg: "bg-positive", text: "text-surface" };
 }
 
 export function UploadHistoryHeatmap({
@@ -78,30 +86,30 @@ export function UploadHistoryHeatmap({
   const selectedData = months.find((m) => m.month === selected) ?? null;
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+    <div className="rounded-lg border border-border bg-surface-raised p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-200">
+          <h2 className="text-2xs font-semibold uppercase tracking-[0.11em] text-text-faint">
             Historial de estados de cuenta subidos
           </h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <p className="mt-tight max-w-[62ch] text-xs leading-relaxed text-text-muted">
             Cada mes cuenta según la fecha de corte del PDF, no la fecha
             límite de pago ni la fecha en que lo subiste — un corte del 22 de
             agosto cuenta para agosto, aunque su pago límite sea en
             septiembre.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-500">
+        <div className="flex shrink-0 items-center gap-1.5 text-xs text-text-faint">
           Menos
-          <span className="h-3 w-3 rounded-sm bg-zinc-800" />
-          <span className="h-3 w-3 rounded-sm bg-emerald-900" />
-          <span className="h-3 w-3 rounded-sm bg-emerald-700" />
-          <span className="h-3 w-3 rounded-sm bg-emerald-400" />
+          <span className="h-3 w-3 rounded-sm bg-surface-raised-2" />
+          <span className="h-3 w-3 rounded-sm bg-positive/25" />
+          <span className="h-3 w-3 rounded-sm bg-positive/55" />
+          <span className="h-3 w-3 rounded-sm bg-positive" />
           Más
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
+      <div className="mt-block flex flex-wrap gap-1.5">
         {months.map((m) => {
           const { bg, text } = levelClasses(m.percentage);
           return (
@@ -110,10 +118,10 @@ export function UploadHistoryHeatmap({
               type="button"
               onClick={() => setSelected(m.month)}
               title={`${longLabel(m.month)}: ${m.uploadedCount}/${m.expectedCount}`}
-              className={`flex h-8 w-10 items-center justify-center rounded-sm text-[11px] font-medium transition ${bg} ${text} ${
+              className={`flex h-8 w-10 items-center justify-center rounded-sm text-2xs font-medium transition ${bg} ${text} ${
                 selected === m.month
-                  ? "ring-2 ring-white/80"
-                  : "hover:ring-1 hover:ring-white/40"
+                  ? "ring-2 ring-accent"
+                  : "hover:ring-1 hover:ring-border-strong"
               }`}
             >
               {shortLabel(m.month)}
@@ -123,8 +131,8 @@ export function UploadHistoryHeatmap({
       </div>
 
       {selectedData && (
-        <div className="mt-5 border-t border-zinc-800 pt-4">
-          <p className="text-sm font-medium text-zinc-200">
+        <div className="mt-block border-t border-border pt-block">
+          <p className="text-sm font-medium text-text">
             {longLabel(selectedData.month)} — {selectedData.uploadedCount}/
             {selectedData.expectedCount}
             {selectedData.percentage !== null &&
@@ -134,17 +142,17 @@ export function UploadHistoryHeatmap({
             {selectedData.accounts.map((a) => (
               <li key={a.accountId} className="flex items-center gap-2">
                 <span
-                  className={a.uploaded ? "text-emerald-400" : "text-zinc-600"}
+                  className={a.uploaded ? "text-positive" : "text-text-faint"}
                 >
                   {a.uploaded ? "✓" : "○"}
                 </span>
                 <span
-                  className={a.uploaded ? "text-zinc-200" : "text-zinc-500"}
+                  className={a.uploaded ? "text-text" : "text-text-faint"}
                 >
                   {a.issuer} — {a.productName}
                 </span>
                 {a.uploaded && a.periodEnd && (
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-xs text-text-faint">
                     (corte {shortDate(a.periodEnd)}
                     {a.dueDate && `, pago límite ${shortDate(a.dueDate)}`})
                   </span>

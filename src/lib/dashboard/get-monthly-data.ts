@@ -18,7 +18,7 @@ export interface CardSummary {
   fechaPago: string | null;
   tasaOrdinaria: number | null;
   interesGenerado: number;
-  estadoTags: string[];
+  estadoTags: CardStatusTag[];
 }
 
 export interface RelevantTransaction {
@@ -192,27 +192,36 @@ function msiPlanRemainingBalance(plan: RawMsiPlanExtraction): number {
 
 const CASH_WITHDRAWAL_RE = /retiro|disposici[oó]n|cajero/i;
 
-// Anota cada tarjeta con lo que le pasó este mes comparado con el anterior —
-// mismo criterio que la columna "Estado" del dashboard viejo (ej. "🚨 Generó
-// intereses", "✅ Mejoró vs mes pasado"), calculado con datos ya guardados,
-// sin IA — así es instantáneo y no depende de qué proveedor tenga activo.
+// Anota cada tarjeta con lo que le pasó este mes comparado con el anterior,
+// calculado con datos ya guardados, sin IA — así es instantáneo y no depende
+// de qué proveedor tenga activo.
+//
+// El tono viaja como dato, no como emoji al frente del texto. Antes la UI
+// hacía `tag.startsWith("✅")` para elegir el color, así que cambiar un emoji
+// aquí rompía un color allá. La regla está en docs/design-system.md.
+export interface CardStatusTag {
+  text: string;
+  tone: "good" | "bad" | "warn";
+}
+
 function computeCardStatusTags(opts: {
   current: { utilizacion: number | null; interesGenerado: number };
   previous: { utilizacion: number | null; interesGenerado: number } | null;
   hasCashWithdrawal: boolean;
-}): string[] {
-  const tags: string[] = [];
+}): CardStatusTag[] {
+  const tags: CardStatusTag[] = [];
 
-  if (opts.hasCashWithdrawal) tags.push("⚠️ Retiro de efectivo");
+  if (opts.hasCashWithdrawal)
+    tags.push({ text: "Retiro de efectivo", tone: "warn" });
 
   if (opts.current.interesGenerado > 0) {
     if (!opts.previous || opts.previous.interesGenerado === 0) {
-      tags.push("🚨 Generó intereses");
+      tags.push({ text: "Generó intereses", tone: "bad" });
     } else {
-      tags.push("🚨 Volvió a generar intereses");
+      tags.push({ text: "Volvió a generar intereses", tone: "bad" });
     }
   } else if (opts.previous && opts.previous.interesGenerado > 0) {
-    tags.push("✅ Ya no generó intereses");
+    tags.push({ text: "Ya no generó intereses", tone: "good" });
   }
 
   if (
@@ -223,13 +232,15 @@ function computeCardStatusTags(opts: {
     const prevPct = opts.previous.utilizacion * 100;
     const currPct = opts.current.utilizacion * 100;
     if (prevPct - currPct >= 8) {
-      tags.push(
-        `✅ Mejoró vs mes pasado (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
-      );
+      tags.push({
+        text: `Mejoró vs mes pasado (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
+        tone: "good",
+      });
     } else if (currPct - prevPct >= 8) {
-      tags.push(
-        `⚠️ Subió utilización (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
-      );
+      tags.push({
+        text: `Subió utilización (${prevPct.toFixed(1)}% → ${currPct.toFixed(1)}%)`,
+        tone: "warn",
+      });
     }
   }
 
@@ -238,7 +249,7 @@ function computeCardStatusTags(opts: {
     opts.current.utilizacion !== null &&
     opts.current.utilizacion <= 0.4
   ) {
-    tags.push("✅ OK");
+    tags.push({ text: "OK", tone: "good" });
   }
 
   return tags;
@@ -698,8 +709,8 @@ export async function getMonthlyDashboardData(
   }
 
   const statusBadge: StatusBadge = balance < 0
-    ? { text: "⚠️ Balance negativo este mes", tone: "bad" }
-    : { text: "✅ Balance positivo este mes", tone: "good" };
+    ? { text: "Balance negativo este mes", tone: "bad" }
+    : { text: "Balance positivo este mes", tone: "good" };
 
   return {
     hasData: true,

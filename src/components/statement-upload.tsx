@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui";
 
 type Account = {
   id: string;
@@ -105,14 +106,14 @@ export function StatementUpload() {
   }
 
   return (
-    <div className="flex flex-col gap-6 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+    <div className="flex flex-col gap-6 rounded-lg border border-border bg-surface-raised p-5">
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-zinc-400">Tarjeta</label>
+        <label className="text-xs font-medium text-text-muted">Tarjeta</label>
         {accounts.length > 0 ? (
           <select
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -121,74 +122,72 @@ export function StatementUpload() {
             ))}
           </select>
         ) : (
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-text-faint">
             Todavía no tienes tarjetas registradas — crea una abajo.
           </p>
         )}
       </div>
 
-      <div className="flex items-end gap-2 border-t border-zinc-800 pt-4">
+      <div className="flex items-end gap-2 border-t border-border pt-4">
         <div className="flex flex-1 flex-col gap-1.5">
-          <label className="text-xs font-medium text-zinc-400">
+          <label className="text-xs font-medium text-text-muted">
             Emisor (ej. Banamex)
           </label>
           <input
             value={newIssuer}
             onChange={(e) => setNewIssuer(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
           />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
-          <label className="text-xs font-medium text-zinc-400">
+          <label className="text-xs font-medium text-text-muted">
             Producto (ej. Explora)
           </label>
           <input
             value={newProduct}
             onChange={(e) => setNewProduct(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+            className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
           />
         </div>
-        <button
-          onClick={handleCreateAccount}
-          className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800"
-        >
+        <Button variant="ghost" size="md"
+          onClick={handleCreateAccount}>
           Agregar tarjeta
-        </button>
+        </Button>
       </div>
 
-      <div className="flex flex-col gap-1.5 border-t border-zinc-800 pt-4">
-        <label className="text-xs font-medium text-zinc-400">
+      <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+        <label className="text-xs font-medium text-text-muted">
           PDF del estado de cuenta
         </label>
         <input
           type="file"
           accept="application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm text-zinc-300"
+          className="text-sm text-text-muted"
         />
       </div>
 
-      <button
+      <Button size="md" className="self-start"
         onClick={handleUpload}
         disabled={!file || !accountId || step === "uploading" || step === "parsing"}
-        className="self-start rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50"
+        
       >
         {step === "uploading"
           ? "Subiendo…"
           : step === "parsing"
             ? "Leyendo el PDF con IA…"
             : "Subir y procesar"}
-      </button>
+      </Button>
 
       {message && (
         <p
-          className={`text-sm ${step === "error" ? "text-red-400" : "text-emerald-400"}`}
+          className={`text-sm ${step === "error" ? "text-negative" : "text-positive"}`}
         >
           {message}
         </p>
       )}
       {warnings.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
           <p className="mb-1 font-semibold">Avisos del parseo:</p>
           <ul className="list-inside list-disc">
             {warnings.map((w, i) => (
