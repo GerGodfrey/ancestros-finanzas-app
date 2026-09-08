@@ -37,3 +37,26 @@ test.describe("Redirects de autenticación (sin sesión)", () => {
     expect(res.status()).toBe(401);
   });
 });
+
+test.describe("Cerrar sesión", () => {
+  // El header envía un <form method="post"> a /auth/signout. Con el 307 que
+  // `NextResponse.redirect` usa por defecto, el navegador preservaba el método
+  // y repetía el POST contra /login —que es una página, no un route handler—:
+  // Vercel respondía 405 y salía "This page isn't working" justo después de
+  // cerrar sesión. Llegó a producción porque estos e2e solo cubrían los
+  // redirects de entrada, nunca el de salida.
+  //
+  // Se afirma sobre el status y no sobre la pantalla final a propósito. El
+  // síntoma visible no se puede reproducir aquí: estos tests corren contra
+  // `next dev`, que ante un POST a una página la renderiza igual en vez de
+  // devolver 405. Un test sobre la pantalla pasaría con y sin el bug, que es
+  // peor que no tenerlo. El status sí distingue, y es la causa exacta.
+  test("responde 303 para que el navegador vaya a /login con GET", async ({
+    request,
+  }) => {
+    const res = await request.post("/auth/signout", { maxRedirects: 0 });
+
+    expect(res.status()).toBe(303);
+    expect(res.headers()["location"]).toMatch(/\/login$/);
+  });
+});
