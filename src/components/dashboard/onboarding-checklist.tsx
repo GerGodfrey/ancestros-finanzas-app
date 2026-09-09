@@ -25,14 +25,14 @@ function buildSteps(state: SetupState): Step[] {
     {
       n: 1,
       title: "Conecta tu IA",
-      why: "Es la que lee tus estados de cuenta. Pegas tu propia API key; se cifra antes de guardarse.",
+      why: "Es la que lee los estados de cuenta de tus tarjetas de crédito. Pegas tu propia API key; se cifra antes de guardarse.",
       done: state.hasProvider,
       href: "/settings#proveedores",
       cta: "Conectar un proveedor",
     },
     {
       n: 2,
-      title: "Registra una tarjeta",
+      title: "Registra una tarjeta de crédito",
       why: "Solo el banco y el nombre del producto. Los últimos 4 dígitos y el límite los toma del primer PDF.",
       done: state.hasAccount,
       href: "/settings#tarjetas",
@@ -40,10 +40,10 @@ function buildSteps(state: SetupState): Step[] {
     },
     {
       n: 3,
-      title: "Sube tu primer estado de cuenta",
-      why: "El PDF que te manda el banco cada mes. De ahí salen los movimientos, las categorías y el dashboard.",
+      title: "Sube tu primer estado de cuenta de tarjeta de crédito",
+      why: "El PDF que el banco te manda cada mes por tu tarjeta de crédito. De ahí salen los movimientos, las categorías y el dashboard.",
       done: state.hasStatement,
-      blockedBy: state.hasAccount ? undefined : "Primero registra una tarjeta.",
+      blockedBy: state.hasAccount ? undefined : "Primero registra una tarjeta de crédito.",
       href: "/dashboard/upload",
       cta: "Subir un PDF",
     },
@@ -63,8 +63,8 @@ export function OnboardingChecklist({ state }: { state: SetupState }) {
             Tres pasos para ver tu primer mes
           </h2>
           <p className="mt-tight max-w-[62ch] text-sm leading-relaxed text-text-muted">
-            Tu dashboard se llena solo a partir del primer estado de cuenta.
-            Esto es lo que falta para llegar ahí.
+            Tu dashboard se llena solo a partir del primer estado de cuenta de
+            tarjeta de crédito. Esto es lo que falta para llegar ahí.
           </p>
         </div>
         <span className="font-mono text-2xs tabular-nums text-text-faint">
