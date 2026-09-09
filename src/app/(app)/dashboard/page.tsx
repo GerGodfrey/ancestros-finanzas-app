@@ -1,5 +1,7 @@
 import { getMonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
+import { getSetupState } from "@/lib/dashboard/get-setup-state";
 import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { MonthNav } from "@/components/dashboard/month-nav";
 import { Badge } from "@/components/ui";
 
@@ -12,7 +14,11 @@ export default async function DashboardPage({
   const targetMonth =
     month && /^\d{4}-\d{2}$/.test(month) ? `${month}-01` : undefined;
 
-  const data = await getMonthlyDashboardData(targetMonth);
+  // Las dos consultas son independientes; en paralelo para no sumar latencia.
+  const [data, setup] = await Promise.all([
+    getMonthlyDashboardData(targetMonth),
+    getSetupState(),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-section">
@@ -36,7 +42,16 @@ export default async function DashboardPage({
           </Badge>
         )}
       </div>
-      <DashboardTabs data={data} />
+      {/*
+        Mientras falte alguno de los tres pasos, el checklist reemplaza a las
+        pestañas: un dashboard vacío no orienta, y un usuario nuevo llega aquí
+        sin saber por dónde empezar. Cuando los tres están hechos, desaparece.
+      */}
+      {setup.complete ? (
+        <DashboardTabs data={data} />
+      ) : (
+        <OnboardingChecklist state={setup} />
+      )}
     </main>
   );
 }
