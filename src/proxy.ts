@@ -47,6 +47,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // El espejo del guard de arriba: quien ya tiene sesión y abre /login no
+  // tiene nada que hacer ahí. Sin esto, la URL que se comparte para entrar
+  // mostraba el formulario aunque la cookie fuera válida, y se leía como
+  // "la sesión no se guarda". Destino fijo a propósito — no se lee ningún
+  // parámetro, así que no hay open redirect.
+  if (user && request.nextUrl.pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   return supabaseResponse;
 }
 

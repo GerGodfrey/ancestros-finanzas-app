@@ -36,9 +36,25 @@ hay que cambiar configuración para moverse entre ambientes**.
 Equipo de Vercel: `gergodfreys-projects` · `orgId` `team_6fPVxrIPp8k6AyzTD79xfvMd`
 (el mismo para los dos proyectos).
 
-> **Ojo con las URLs**: Vercel asigna `<proyecto>-<equipo>.vercel.app`. La forma
-> corta (`finanzas-app-sandbox.vercel.app`) **no está asignada** y devuelve 404.
-> Usa siempre la larga.
+> **Ojo con las URLs**: Vercel asigna `<proyecto>-<equipo>.vercel.app`, y a veces
+> también la forma corta `<proyecto>.vercel.app` si el nombre está libre. Hoy:
+>
+> | | corta | larga |
+> |---|---|---|
+> | sandbox | `finanzas-app-sandbox.vercel.app` → **404**, no asignada | `finanzas-app-sandbox-gergodfreys-projects.vercel.app` |
+> | prod | `finanzas-app-prod.vercel.app` → **funciona** | `finanzas-app-prod-gergodfreys-projects.vercel.app` |
+>
+> **Las dos de prod responden, y eso es una trampa.** Las cookies de sesión son
+> por host: si el OAuth devuelve al usuario a un host y después abre el otro,
+> no tiene sesión ahí. Se vio en producción como «abro el link dos veces y me
+> pide login otra vez». Reglas:
+>
+> - **Las dos URLs de prod van en Supabase Auth → Redirect URLs.** Si falta una,
+>   Supabase descarta el `redirectTo` y cae al Site URL, y la cookie se crea en
+>   un host distinto al que el usuario abrió.
+> - **La que se comparte con usuarios es la corta**, `finanzas-app-prod.vercel.app`.
+> - El smoke test del CI pega a la larga. Si algún día se canonicaliza a un solo
+>   host con redirect, revisar primero que el smoke lo siga.
 
 ## Desarrollo local
 
@@ -211,7 +227,7 @@ completados el 2026-09-06:
 - [x] `supabase db push` aplicó las migraciones (crea tablas, RLS y el bucket)
 - [x] Proveedor Google habilitado en Supabase Auth (client ID y secret de Google Cloud Console)
 - [x] En Google Cloud Console: `https://<ref>.supabase.co/auth/v1/callback` agregado a "Authorized redirect URIs"
-- [x] En Supabase Auth → URL Configuration: **Site URL** y **Redirect URLs** con la URL de Vercel, más `http://localhost:3000/**` para desarrollo local
+- [x] En Supabase Auth → URL Configuration: **Site URL** con la URL de Vercel, y en **Redirect URLs** *todas* las URLs por las que se puede entrar (`https://<host>/**` por cada host que resuelva — en prod son dos, ver «Ojo con las URLs» arriba), más `http://localhost:3000/**` para desarrollo local
 - [x] Proyecto de Vercel creado **sin conectar Git**
 - [x] Las 3 variables cargadas en Vercel (scope Production)
 - [x] Node.js Version fijado en Vercel en 24.x (igual que `.nvmrc`)
