@@ -20,6 +20,7 @@ export default function SettingsPage() {
       </PageSection>
 
       <PageSection
+        id="proveedores"
         title="Proveedores de IA"
         description="Elige qué modelo de IA quieres usar para leer tus estados de cuenta y para el chatbot, y conecta tu propia API key."
       >
