@@ -36,25 +36,34 @@ hay que cambiar configuración para moverse entre ambientes**.
 Equipo de Vercel: `gergodfreys-projects` · `orgId` `team_6fPVxrIPp8k6AyzTD79xfvMd`
 (el mismo para los dos proyectos).
 
-> **Ojo con las URLs**: Vercel asigna `<proyecto>-<equipo>.vercel.app`, y a veces
-> también la forma corta `<proyecto>.vercel.app` si el nombre está libre. Hoy:
+> **Ojo con las URLs**: cada proyecto de Vercel responde en **dos hosts** —la
+> forma larga `<proyecto>-<equipo>.vercel.app` y la corta `<proyecto>.vercel.app`.
+> (La corta del sandbox daba 404 cuando se escribió esta bitácora; ya no.)
 >
-> | | corta | larga |
+> | | corta (la que se comparte) | larga (la que usa el CI) |
 > |---|---|---|
-> | sandbox | `finanzas-app-sandbox.vercel.app` → **404**, no asignada | `finanzas-app-sandbox-gergodfreys-projects.vercel.app` |
-> | prod | `finanzas-app-prod.vercel.app` → **funciona** | `finanzas-app-prod-gergodfreys-projects.vercel.app` |
+> | sandbox | `finanzas-app-sandbox.vercel.app` | `finanzas-app-sandbox-gergodfreys-projects.vercel.app` |
+> | prod | `finanzas-app-prod.vercel.app` | `finanzas-app-prod-gergodfreys-projects.vercel.app` |
 >
-> **Las dos de prod responden, y eso es una trampa.** Las cookies de sesión son
-> por host: si el OAuth devuelve al usuario a un host y después abre el otro,
-> no tiene sesión ahí. Se vio en producción como «abro el link dos veces y me
-> pide login otra vez». Reglas:
+> **Que respondan dos hosts es una trampa.** Las cookies de sesión son por host.
+> Si el OAuth devuelve al usuario a un host distinto del que abrió, al volver a
+> abrir el suyo no tiene sesión. Se vio en producción como «abro el link dos
+> veces y me pide login otra vez», y se reprodujo igual en sandbox.
 >
-> - **Las dos URLs de prod van en Supabase Auth → Redirect URLs.** Si falta una,
->   Supabase descarta el `redirectTo` y cae al Site URL, y la cookie se crea en
->   un host distinto al que el usuario abrió.
-> - **La que se comparte con usuarios es la corta**, `finanzas-app-prod.vercel.app`.
+> El mecanismo: la app pide volver a `window.location.origin + /auth/callback`.
+> Si ese host **no está en Supabase Auth → Redirect URLs**, Supabase descarta el
+> `redirectTo` y cae al Site URL — y la cookie se crea allá. Reglas:
+>
+> - **Los dos hosts de cada ambiente van en Redirect URLs de su proyecto de
+>   Supabase**, como `https://<host>/**`. Prod en `frptyythufguqbalosdo`,
+>   sandbox en `wdeuoephxdszwluefybm`.
+> - **Site URL = la corta**, en ambos: es el fallback y debe ser el host que la
+>   gente conoce.
 > - El smoke test del CI pega a la larga. Si algún día se canonicaliza a un solo
 >   host con redirect, revisar primero que el smoke lo siga.
+> - Para comprobar que quedó bien: incógnito, abrir la corta, iniciar sesión, y
+>   mirar en qué host aterrizas. Si es la corta y al reabrirla sigues dentro,
+>   está bien.
 
 ## Desarrollo local
 
