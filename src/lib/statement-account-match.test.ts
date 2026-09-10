@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkStatementMatchesAccount } from "./statement-account-match";
+import { ISSUERS } from "./issuers";
 
 describe("checkStatementMatchesAccount", () => {
   it("pasa cuando emisor y last4 coinciden exactamente", () => {
@@ -73,5 +74,50 @@ describe("checkStatementMatchesAccount", () => {
       accountLast4: null,
     });
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("alias: la lista de emisores del selector y los PDFs reales", () => {
+  // Cada emisor que se puede elegir en el formulario tiene que reconocer al
+  // menos su propio nombre tal cual — si no, el guard rechaza el primer PDF.
+  it.each([...ISSUERS])("«%s» se reconoce a sí mismo", (issuer) => {
+    const r = checkStatementMatchesAccount({
+      extractedIssuer: issuer,
+      extractedLast4: null,
+      accountIssuer: issuer,
+      accountLast4: null,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it.each([
+    ["Nu", "Nu México"],
+    ["Nu", "NU BANK"],
+    ["BBVA", "BBVA México"],
+    ["Banamex", "Citibanamex"],
+    ["Santander", "Banco Santander México"],
+    ["Stori", "StoriCard"],
+    ["Hey Banco", "Banregio"],
+    ["RappiCard", "Rappi"],
+    ["BanCoppel", "Coppel"],
+  ])("tarjeta «%s» acepta un PDF que dice «%s»", (account, pdf) => {
+    const r = checkStatementMatchesAccount({
+      extractedIssuer: pdf,
+      extractedLast4: null,
+      accountIssuer: account,
+      accountLast4: null,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("sigue rechazando un nombre inventado: «nana» contra un PDF de Nu", () => {
+    const r = checkStatementMatchesAccount({
+      extractedIssuer: "Nu",
+      extractedLast4: "4321",
+      accountIssuer: "nana",
+      accountLast4: null,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/emisor/i);
   });
 });
