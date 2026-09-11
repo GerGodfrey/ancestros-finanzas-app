@@ -59,6 +59,14 @@ consecuencias prácticas:
 
 ## Saber qué commit corre en cada ambiente
 
+> **Los e2e son también el smoke.** `e2e/*.spec.ts` corre dos veces: contra
+> `next dev` en el job de e2e, y contra el sandbox y prod desplegados como
+> smoke (con `PLAYWRIGHT_BASE_URL`). Un test que afirme algo que solo es
+> cierto en local —un `env: "local"`, un dato de prueba que no existe en la
+> base real— rompe el smoke y bloquea el gate. Ya pasó con `/api/version`.
+> Antes de subir un e2e nuevo, correrlo también así:
+> `PLAYWRIGHT_BASE_URL=https://finanzas-app-sandbox.vercel.app npx playwright test`.
+
 `curl <host>/api/version` devuelve `{ sha, short, env }` del despliegue. Para
 comprobar que todo está alineado, comparar contra `git rev-parse --short
 origin/main`; localhost se compara con `git status -sb` (`behind N` = falta
