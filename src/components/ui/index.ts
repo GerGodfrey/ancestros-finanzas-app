@@ -4,6 +4,7 @@ export { Stat } from "./stat";
 export { PageSection, FieldGroup } from "./section";
 export { Badge } from "./badge";
 export { Modal } from "./modal";
+export { EmptySlot } from "./empty-slot";
 export {
   TONE_CHIP,
   TONE_EMOJI,
