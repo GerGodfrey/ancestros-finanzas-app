@@ -65,9 +65,9 @@ mano, desde la pantalla de subida).
 |---|---|---|
 | `id` | uuid (PK) | |
 | `user_id` | uuid (FK) | dueño |
-| `issuer` | text | "Banamex", "American Express"... |
-| `product_name` | text | "Explora", "Platinum"... |
-| `last4` | text | opcional |
+| `issuer` | text | Se elige de la lista de `src/lib/issuers.ts` («Nu», «BBVA»…) o se escribe con «Otro». Cada valor de la lista tiene alias en `statement-account-match.ts` |
+| `product_name` | text | Opcional en el formulario. Si va vacío se guarda el mismo `issuer` como nombre provisional (la columna es `not null`) y la UI lo muestra solo como «Nu». El primer PDF lo reemplaza |
+| `last4` | text | Ya no se pide al crear: lo escribe el parser desde el primer PDF. Un typo aquí rechazaba el primer estado culpando al archivo |
 | `credit_limit` | numeric | opcional, se puede llenar después con lo que diga el PDF |
 | `rate_ordinaria` / `rate_moratoria` | numeric | tasas anuales |
 | `active` | boolean | |
@@ -283,6 +283,12 @@ de Hierro porque el usuario seleccionó la tarjeta equivocada al subirlo —
 su saldo y sus planes MSI se mezclaron silenciosamente con esa tarjeta
 hasta que se detectó a mano. `checkStatementMatchesAccount()` ahora
 bloquea ese caso antes de guardar cualquier dato.
+
+Con un matiz añadido después: el bloqueo solo es un rechazo seco **cuando la
+tarjeta ya tiene estados parseados**. En el primero, el parse devuelve la
+discrepancia como una pregunta (`409 first_statement_mismatch`) porque no hay
+historial que contaminar y el dato malo suele ser el tecleado, no el del PDF.
+Ver la regla 3 en `architecture.md`.
 
 ## Notas de seguridad
 

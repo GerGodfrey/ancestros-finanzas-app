@@ -30,7 +30,11 @@ sandbox, nunca un build distinto.
    supabase link --project-ref <ref-de-prod>
    supabase db dump --data-only -f backup-prod-$(date +%Y%m%d-%H%M).sql
    ```
-   Guárdalo **fuera del repo** (no lo commitees, no lo subas como artifact).
+   Si no tienes el CLI de Supabase (necesita Docker), la vía que se usó de
+   verdad la primera vez: Supabase → Table Editor → **Download CSV** de
+   `accounts`, `statements`, `transactions`, `msi_plans`, `incomes`,
+   `fixed_costs` y `debts`. Guárdalo **fuera del repo** (no lo commitees, no lo
+   subas como artifact).
 3. Abre la corrida en la pestaña Actions → botón **Review deployments** →
    selecciona `production` → **Approve and deploy**.
 4. Verifica que `migrate-production`, `deploy-production` y `smoke-production`
@@ -38,6 +42,29 @@ sandbox, nunca un build distinto.
 
 Solo se aprueba una vez por corrida: los tres jobs de prod corren seguidos tras
 ese click.
+
+**Un run esperando aprobación se cancela solo si llega otro push a `main`.**
+Es el `concurrency: cancel-in-progress` de `ci.yml`: solo puede haber un run
+vivo por rama, para que dos migraciones no peleen por la misma base. Dos
+consecuencias prácticas:
+
+- No hace falta cancelar a mano los gates viejos que se acumulan: al hacer
+  push, el anterior queda `Cancelled` y el nuevo —que incluye ese commit y
+  los siguientes— es el único que se puede aprobar. Nunca se puede promover
+  por error un commit viejo.
+- Si quieres que un cambio llegue a producción **solo**, sin mezclarse con el
+  siguiente, aprueba su gate antes de mergear el siguiente PR. Una iteración a
+  la vez: rama → PR → merge → sandbox → respaldo → aprobar → verificar → la
+  siguiente.
+
+## Saber qué commit corre en cada ambiente
+
+Hoy solo se puede inferir: sandbox es el último push a `main` cuya pierna quedó
+verde, y prod es el último gate aprobado. Ambos se leen en Actions. Localhost
+se compara con `git status -sb` (`behind N` = falta `git pull`).
+
+Verificarlo de frente —sin Actions ni inferencias— es el pendiente de
+`/api/version` en `pendientes.md`.
 
 > **Nunca** subas un dump de **datos** de producción como artifact de Actions.
 > En repos públicos los artifacts los descarga cualquiera; eso publicaría todos
