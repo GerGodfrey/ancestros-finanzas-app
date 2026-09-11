@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getUploadCoverage } from "@/lib/dashboard/get-upload-coverage";
-import { currentMonthFirstDay, monthLongLabel } from "@/lib/month";
+import { monthOptionsFromCoverage } from "@/lib/month";
 import { StatementUpload } from "@/components/statement-upload";
 import { BudgetQuickAdd } from "@/components/dashboard/budget-quick-add";
 import { PendingThisMonth } from "@/components/upload/pending-this-month";
@@ -13,7 +13,6 @@ import { Panel } from "@/components/ui";
 // usuarios no lo encontraban — y sin ingresos el balance solo muestra gastos.
 export default async function ActualizaTuMesPage() {
   const coverage = await getUploadCoverage();
-  const month = currentMonthFirstDay();
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-section">
@@ -49,13 +48,20 @@ export default async function ActualizaTuMesPage() {
           2 · Ingresos, costos fijos y deudas
         </h2>
         <p className="mt-tight max-w-[62ch] text-sm leading-relaxed text-text-muted">
-          Tu sueldo y tus gastos recurrentes no vienen en el estado de cuenta,
-          así que van a mano. Sin ellos, el balance de tu dashboard solo muestra
-          lo que gastaste — nunca lo que te quedó.
+          Tu sueldo y gastos recurrentes que requieren EFECTIVO no vienen en el
+          estado de cuenta de tus tarjetas de crédito, así que van a mano.
+        </p>
+        <p className="mt-tight max-w-[62ch] text-xs leading-relaxed text-text-faint">
+          Sin ellos, el balance de tu dashboard solo muestra lo que gastaste —
+          nunca lo que te quedó.
         </p>
         <div className="mt-block">
-          <Panel title={`Agregar a ${monthLongLabel(month)}`}>
-            <BudgetQuickAdd month={month} />
+          <Panel title="Agregar">
+            <BudgetQuickAdd
+              months={monthOptionsFromCoverage(
+                coverage.months.map((m) => m.month),
+              )}
+            />
           </Panel>
         </div>
       </section>
