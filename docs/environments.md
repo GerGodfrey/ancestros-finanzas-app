@@ -76,8 +76,19 @@ distintas y se comprueban distinto:
 | sandbox | el último push a `main` | el pipeline falló | Actions: último run de `main` verde hasta «Smoke tests sandbox» |
 | prod | el último gate aprobado | un run que nadie aprobó | el mismo run, verde hasta «Smoke tests producción» |
 
-Todo eso es inferencia. Leer el commit exacto de cada deployment es el
-pendiente `/api/version` en `pendientes.md`.
+Y para leer el commit exacto sin inferir nada, cada ambiente se etiqueta a
+sí mismo en `/api/version`:
+
+```bash
+curl -s https://finanzas-app-prod.vercel.app/api/version
+curl -s https://finanzas-app-sandbox.vercel.app/api/version
+git rev-parse --short origin/main
+```
+
+Tres `short` iguales = todo alineado. El SHA lo inyecta `ci.yml` en el build
+(`NEXT_PUBLIC_GIT_SHA`, `NEXT_PUBLIC_DEPLOY_ENV`); en local responde
+`env: "local"` con `sha: null`. Es público a propósito —el repo lo es— y va
+con `Cache-Control: no-store` para que nunca diga un commit viejo.
 
 ## Desarrollo local
 

@@ -60,3 +60,18 @@ test.describe("Cerrar sesión", () => {
     expect(res.headers()["location"]).toMatch(/\/login$/);
   });
 });
+
+test.describe("/api/version", () => {
+  // Es la etiqueta que dice qué commit corre en cada ambiente. Pública a
+  // propósito y sin caché: la gracia es que diga lo que corre AHORA.
+  test("responde sin sesión, sin caché, y con env=local fuera del CI", async ({
+    request,
+  }) => {
+    const res = await request.get("/api/version");
+    expect(res.status()).toBe(200);
+    expect(res.headers()["cache-control"]).toContain("no-store");
+
+    const body = await res.json();
+    expect(body).toMatchObject({ env: "local", sha: null, short: null });
+  });
+});

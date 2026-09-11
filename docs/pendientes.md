@@ -130,11 +130,6 @@ Hallazgos de la revisión que no eran parte del pipeline:
 
 ## Salidos de la primera ronda de feedback (sept. 2026)
 
-- **`/api/version`.** Un route handler que devuelva `{ sha, env }`, con el
-  `GITHUB_SHA` pasado al `vercel build` desde `ci.yml`. Hoy saber qué commit
-  corre en sandbox o en prod es inferirlo por marcadores indirectos; con esto
-  es un `curl` por ambiente y comparar contra `git rev-parse origin/main`.
-  Chico, sin datos, y quita la pregunta «¿ya está desplegado?» para siempre.
 - **e2e con sesión inyectada.** Hoy los e2e solo prueban redirects: nada tras
   el login se cubre, y tres veces en esta ronda hubo que montar páginas
   temporales para ver un componente. La técnica ya está probada y funciona:
@@ -164,5 +159,5 @@ Hallazgos de la revisión que no eran parte del pipeline:
 ## Documentación
 
 - **`docs/environments.md`**: las casillas del checklist de setup ya están
-  marcadas. Lo que le falta es que la tabla de «cómo saber qué está desplegado
-  dónde» apunte a `/api/version` en cuanto exista.
+  marcadas y la tabla de «cómo saber qué está desplegado dónde» ya apunta a
+  `/api/version`. Nada pendiente aquí.
