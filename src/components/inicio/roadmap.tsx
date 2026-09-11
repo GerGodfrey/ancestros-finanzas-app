@@ -32,52 +32,60 @@ export function Roadmap() {
 
   return (
     <section aria-label="Hacia dónde va el producto">
-      <ol className="grid gap-block sm:grid-cols-2 lg:grid-cols-4 lg:gap-x-8">
-        {STEPS.map((step, i) => (
-          <li key={step.title} className="flex flex-col">
-            {/*
-              La línea vive en el propio paso, no en un contenedor aparte: así
-              se rompe sola al apilarse en móvil, sin media queries que
-              mantener. El último no la lleva, iría hacia el vacío.
-            */}
-            <div className="flex items-center gap-3" aria-hidden="true">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  i === lastAvailable
-                    ? "bg-accent"
-                    : step.available
-                      ? "bg-text-muted"
-                      : "border border-border-strong bg-surface"
-                }`}
-              />
-              {i < STEPS.length - 1 && (
-                <span className="hidden h-px flex-1 bg-border lg:block" />
-              )}
-            </div>
+      {/*
+        Una sola columna: la línea corre en vertical y encadena los pasos de
+        arriba abajo, que es como se lee. En cuatro columnas cada paso competía
+        por la atención; así se recorren en orden, que es de lo que trata una
+        secuencia.
+      */}
+      <ol className="flex flex-col">
+        {STEPS.map((step, i) => {
+          const isLast = i === STEPS.length - 1;
+          return (
+            <li key={step.title} className="flex gap-5">
+              {/* Carril del punto y la línea. El último no lleva línea. */}
+              <div
+                aria-hidden="true"
+                className="flex w-2 shrink-0 flex-col items-center"
+              >
+                <span
+                  className={`mt-2 h-2 w-2 shrink-0 rounded-full ${
+                    i === lastAvailable
+                      ? "bg-accent"
+                      : step.available
+                        ? "bg-text-muted"
+                        : "border border-border-strong bg-surface"
+                  }`}
+                />
+                {!isLast && <span className="w-px flex-1 bg-border" />}
+              </div>
 
-            <div className="mt-block flex items-baseline gap-3">
-              <span className="font-mono text-2xs tabular-nums text-text-faint">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              {!step.available && (
-                <span className="rounded border border-border px-1.5 py-0.5 text-2xs uppercase tracking-[0.08em] text-text-faint">
-                  Pronto
-                </span>
-              )}
-            </div>
+              <div className={isLast ? "pb-0" : "pb-section"}>
+                <div className="flex items-baseline gap-3">
+                  <span className="font-mono text-2xs tabular-nums text-text-faint">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  {!step.available && (
+                    <span className="rounded border border-border px-1.5 py-0.5 text-2xs uppercase tracking-[0.08em] text-text-faint">
+                      Pronto
+                    </span>
+                  )}
+                </div>
 
-            <h3
-              className={`mt-tight text-base font-semibold leading-snug ${
-                step.available ? "text-text" : "text-text-muted"
-              }`}
-            >
-              {step.title}
-            </h3>
-            <p className="mt-tight max-w-[34ch] text-sm leading-relaxed text-text-muted">
-              {step.body}
-            </p>
-          </li>
-        ))}
+                <h3
+                  className={`mt-tight text-lg font-semibold leading-snug ${
+                    step.available ? "text-text" : "text-text-muted"
+                  }`}
+                >
+                  {step.title}
+                </h3>
+                <p className="mt-tight max-w-[54ch] text-sm leading-relaxed text-text-muted">
+                  {step.body}
+                </p>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

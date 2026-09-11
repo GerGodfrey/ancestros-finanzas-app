@@ -23,13 +23,8 @@ export default function InicioPage() {
         />
 
         <div className="relative z-10 mx-auto w-full max-w-xl py-section">
-          <h1 className="font-display text-text [font-stretch:112%]">
-            <span className="block text-display font-extralight leading-[0.9] tracking-[-0.025em]">
-              Finanzas
-            </span>
-            <span className="mt-2 block text-lg font-light tracking-[0.02em] text-text-muted">
-              por Ancestros
-            </span>
+          <h1 className="font-display text-display font-extralight leading-[0.9] tracking-[-0.025em] text-text [font-stretch:112%]">
+            Finanzas
           </h1>
 
           <p className="mt-8 max-w-[40ch] text-base leading-relaxed text-text-muted">
@@ -48,6 +43,40 @@ export default function InicioPage() {
         </div>
       </section>
 
+
+      {/*
+        La franja que rompe, entre el hero y el roadmap. Invierte los tokens
+        en vez de hardcodear negro, así el gesto funciona igual en Papel y en
+        Plano — y al quedar en medio corta la hoja en dos, que es lo que se
+        buscaba: separar quiénes somos de hacia dónde vamos.
+      */}
+      <section className="bg-text px-6 py-section text-surface sm:px-12 lg:px-24">
+        <div className="mx-auto w-full max-w-6xl">
+          <p className="font-mono text-2xs uppercase tracking-[0.14em] text-surface/60">
+            Un proyecto
+          </p>
+          {/* El contraste de peso hace el trabajo que haría una negrita o un
+              subrayado, sin salirse del sistema: «POR» se queda en el peso
+              del display y «ANCESTROS» sube, así que el nombre es lo que se
+              lee primero. */}
+          <p className="mt-block font-display text-display leading-[0.9] tracking-[-0.025em] [font-stretch:112%]">
+            <span className="font-extralight">POR </span>
+            <span className="font-semibold">ANCESTROS</span>
+          </p>
+
+          {/*
+            La declaración vive aquí y no junto al roadmap: al lado de los
+            pasos quedaba flotando en una columna medio vacía, y aquí hace
+            falta — sin ella la franja era un letrero con un nombre y nada
+            más. El nombre dice quiénes somos; esta línea, qué queremos ser.
+          */}
+          <p className="mt-section max-w-[46ch] text-lg font-light leading-relaxed text-surface/80">
+            Queremos ser el lugar donde entiendes tu dinero — y donde lo que
+            aprendes le sirve a alguien más.
+          </p>
+        </div>
+      </section>
+
       {/* ── Roadmap ──────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-6xl px-6 py-section sm:px-12 lg:px-24">
         <h2 className="max-w-[24ch] font-display text-2xl font-light leading-tight tracking-tight text-text">
@@ -55,27 +84,6 @@ export default function InicioPage() {
         </h2>
         <div className="mt-section">
           <Roadmap />
-        </div>
-
-        <p className="mt-section max-w-[50ch] text-lg font-light leading-relaxed text-text">
-          No queremos ser otra app de gastos. Queremos ser el lugar donde
-          entiendes tu dinero — y donde lo que aprendes le sirve a alguien más.
-        </p>
-      </section>
-
-      {/*
-        La franja que rompe. Invierte los tokens en vez de hardcodear negro:
-        así el gesto funciona igual en Papel y en Plano, y sigue siendo el
-        único punto de la hoja donde el fondo cambia de lado.
-      */}
-      <section className="bg-text px-6 py-section text-surface sm:px-12 lg:px-24">
-        <div className="mx-auto w-full max-w-6xl">
-          <p className="font-mono text-2xs uppercase tracking-[0.14em] text-surface/60">
-            Un proyecto de
-          </p>
-          <p className="mt-block font-display text-display font-extralight leading-[0.9] tracking-[-0.025em] [font-stretch:112%]">
-            POR ANCESTROS
-          </p>
         </div>
       </section>
     </main>
