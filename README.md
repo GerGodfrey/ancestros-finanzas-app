@@ -85,15 +85,21 @@ automáticamente; el resto lo valida el CI.
 
 ## 5. Prueba manual end-to-end (con credenciales reales)
 
-1. Login con Google.
+1. Login con Google. Una cuenta nueva llega a un dashboard con un
+   **checklist de tres pasos** en lugar de vacío; desaparece solo cuando
+   los tres están hechos.
 2. Configuración → agrega una API key (Anthropic, OpenAI, Gemini o
    DeepSeek — Gemini tiene un tier gratis permanente sin tarjeta, vía
    [Google AI Studio](https://aistudio.google.com/apikey), si quieres
-   probar sin gastar) y agrega/edita tus tarjetas.
-3. Subir PDF → elige la tarjeta correcta y sube un estado de cuenta real →
-   revisa que los movimientos y planes MSI queden bien en el Dashboard (si
-   el PDF no corresponde a la tarjeta seleccionada, el parseo se rechaza
-   con un error explícito en vez de guardarse en la cuenta equivocada).
+   probar sin gastar; junto al selector hay una guía por proveedor) y
+   agrega una tarjeta: el banco se elige de una lista, el nombre es
+   opcional, y los últimos 4 dígitos los toma del primer PDF.
+3. Subir PDF → elige la tarjeta y arrastra un estado de cuenta real →
+   revisa que los movimientos y planes MSI queden bien en el Dashboard. Si
+   el PDF no corresponde a la tarjeta: en su **primer** estado de cuenta la
+   app pregunta «¿es la misma tarjeta?» y con «Sí» la actualiza; con
+   historial previo, el parseo se rechaza con un error explícito en vez de
+   guardarse en la cuenta equivocada.
 4. Dashboard → revisa Resumen / Desglose / Movimientos / Próximo Mes /
    Validación, y navega entre meses con el selector junto al título (solo
    deben aparecer datos del mes que tenga un PDF procesado).

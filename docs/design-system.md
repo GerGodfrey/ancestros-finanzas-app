@@ -384,6 +384,32 @@ requiere recargar.
 
 ---
 
+## Las primitivas
+
+Viven en [`src/components/ui/`](../src/components/ui/) y se importan desde
+`@/components/ui`. Existen porque estaban demostradamente duplicadas —el botón
+en 10 archivos, la card en 11—, no por especulación. Sin CVA ni
+tailwind-merge: con estas variantes, un objeto de strings basta.
+
+| Primitiva | Para qué | Nota |
+|---|---|---|
+| `Button` | Toda acción. Variantes `primary` (tinta invertida), `ghost`, `danger`; tamaños `sm`, `md` | `type="button"` por defecto: dentro de un `<form>` hay que pasar `type="submit"` explícito |
+| `Card` | La superficie elevada | |
+| `Panel` | Card con título en versalitas y riel de acento | El riel es siempre acento: un riel de color de tono significaría algo |
+| `Stat` | La cifra de un KPI, en Geist Mono con `tabular-nums`; riel de 2 px que toma el **tono** | |
+| `Badge` | Estado con tono; el emoji sale del tono, nunca al revés | `withEmoji` lo muestra |
+| `Modal` | Diálogo; `Escape` y clic fuera lo cierran | Subió desde `dashboard-tabs.tsx` cuando lo necesitó la guía de API keys |
+| `PageSection` | Sección de página de ajustes: título, descripción, regla arriba | Acepta `id` para anclar (`/settings#tarjetas`) |
+| `FieldGroup` | Subtítulo de bloque dentro de una sección | |
+
+Los mapas de tono (`TONE_EMOJI`, `TONE_TEXT`, `TONE_RAIL`, `TONE_CHIP`) están
+en `tone.ts` y son el único lugar donde un tono se convierte en color o emoji.
+
+Componentes de feature que siguen las mismas reglas pero no son primitivas:
+`OnboardingChecklist` (dashboard vacío de un usuario nuevo), `IssuerField`
+(selector de banco con salida a «Otro», dentro de `account-settings.tsx`) y
+`ThemeToggle`.
+
 ## Cómo cambiar cada cosa
 
 ### Cambiar el color de marca

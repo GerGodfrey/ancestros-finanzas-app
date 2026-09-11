@@ -43,6 +43,16 @@ listo y verificar.
 3. Dile que apruebe en Actions → **Review deployments** → `production`.
 4. Cuando apruebe, verifica los tres jobs de prod y el smoke final.
 
+`ci.yml` tiene `concurrency: cancel-in-progress`: un push a `main` cancela solo
+el run anterior, incluido uno esperando el gate. No mandes al usuario a
+cancelar gates viejos a mano —ya están cancelados—, y no hagas push a `main`
+mientras haya un gate que el usuario quiera aprobar por separado.
+
+Si `gh` no está instalado, no se puede leer el estado del run desde aquí: se
+verifica desde fuera con `curl` a los hosts desplegados (ver
+`environments.md` → «Ojo con las URLs») y se le pide al usuario la captura de
+Actions.
+
 ## Agregar una migración
 
 1. Siguiente número consecutivo en `supabase/migrations/`.

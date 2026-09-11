@@ -26,6 +26,7 @@ PDF (navegador)
         ├─ descifra la API key del usuario
         ├─ Skill + gateway de IA → JSON validado contra schema.json (ajv)
         ├─ valida emisor/last4 contra la tarjeta elegida  ← regla dura
+        │    (en el 1er PDF de la tarjeta: pregunta en vez de rechazar)
         ├─ escribe accounts / statements / transactions / msi_plans
         ├─ detecta domiciliaciones (determinístico, sin IA)
         └─ regenera los insights del mes (IA)
@@ -126,6 +127,15 @@ no se muestra nada "en vivo".
 comparan emisor y últimos 4 dígitos (`statement-account-match.ts`). Si no
 coinciden, el statement se marca `error` y no se toca ninguna otra tabla.
 Nació de un PDF de Amex que quedó mezclado con la cuenta de Palacio de Hierro.
+
+Con una excepción deliberada: **el primer estado de cuenta de una tarjeta no
+se rechaza, se pregunta.** El guard protege el historial, y en el primero no
+hay historial que proteger; en cambio, el dato que suele estar mal es el de la
+tarjeta —lo tecleó una persona— y no el del PDF, que lo dice el banco. Así
+que el parse devuelve `409 first_statement_mismatch` con los dos valores, la
+UI pregunta «¿es la misma tarjeta?», y con consentimiento actualiza banco y
+últimos 4 y reintenta. A partir del segundo PDF, el rechazo es el de siempre.
+Nació de un cliente que escribió «nana» donde iba «Nu».
 
 **4. Un statement por tarjeta por mes.** Si aparecen dos `parsed` del mismo mes
 y tarjeta (típicamente el mismo PDF subido dos veces tras un reintento), se usa

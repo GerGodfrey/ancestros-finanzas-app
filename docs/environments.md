@@ -65,6 +65,20 @@ Equipo de Vercel: `gergodfreys-projects` · `orgId` `team_6fPVxrIPp8k6AyzTD79xfv
 >   mirar en qué host aterrizas. Si es la corta y al reabrirla sigues dentro,
 >   está bien.
 
+## Saber qué corre dónde
+
+`main` en GitHub es la referencia; los otros tres se desalinean por razones
+distintas y se comprueban distinto:
+
+| Ambiente | Debería tener | Se desalinea cuando | Cómo comprobarlo |
+|---|---|---|---|
+| localhost | lo mismo que `origin/main` | trabajas en una rama | `git status -sb` → `behind N` ⇒ `git pull` |
+| sandbox | el último push a `main` | el pipeline falló | Actions: último run de `main` verde hasta «Smoke tests sandbox» |
+| prod | el último gate aprobado | un run que nadie aprobó | el mismo run, verde hasta «Smoke tests producción» |
+
+Todo eso es inferencia. Leer el commit exacto de cada deployment es el
+pendiente `/api/version` en `pendientes.md`.
+
 ## Desarrollo local
 
 `.env.local` apunta al **sandbox**, no a producción. Para recrearlo desde cero

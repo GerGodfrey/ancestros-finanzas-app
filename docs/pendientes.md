@@ -20,9 +20,12 @@ que las primitivas existen, cada subcomponente se puede mover solo.
 
 ## Respaldos de producción
 
-**Hoy no existe ningún respaldo de los datos financieros.** Supabase en plan
-gratis no hace backups automáticos, ni point-in-time, ni tiene botón de
-restaurar: la única copia del historial es la base de producción misma.
+**Existe uno: CSV de las siete tablas, bajado el 8 de septiembre de 2026** antes
+de promover la Iteración 1 del feedback de clientes. Fue el primero desde que
+la app existe; antes de él se aprobaron dos deploys a producción sin ninguno.
+Supabase en plan gratis no hace backups automáticos, ni point-in-time, ni
+tiene botón de restaurar: ese archivo es la única copia del historial fuera
+de la base.
 
 El riesgo no es teórico. En `0001_init.sql`, `statements`, `transactions` y
 `msi_plans` cuelgan de `accounts` con `on delete cascade` — borrar una tarjeta
@@ -57,8 +60,9 @@ Alternativa rápida sin instalar nada: en el Table Editor cada tabla tiene
 `msi_plans`, `incomes`, `fixed_costs` y `debts` queda un respaldo aceptable,
 aunque restaurarlo sea más manual.
 
-**Pendiente aparte:** decidir cada cuándo hacerlo. Lo natural es después de
-cada carga mensual de PDFs, que es cuando entra información nueva.
+**Lo que sigue pendiente es la cadencia.** Lo natural es después de cada
+carga mensual de PDFs, que es cuando entra información nueva, y siempre antes
+de aprobar un gate de producción que toque datos. Hoy depende de acordarse.
 
 ---
 
@@ -112,17 +116,53 @@ Hallazgos de la revisión que no eran parte del pipeline:
 
 ## Mantenimiento
 
-- **PRs de Dependabot abiertos** que son saltos de major y necesitan revisión:
-  eslint 9→10 (#9), TypeScript 5→7 (#8), @types/node 20→26 (#7), y un grupo de
-  10 actualizaciones minor/patch (#6). El grupo de minor/patch debería entrar
-  sin drama; los otros tres requieren probar que nada se rompa.
+- **PRs de Dependabot abiertos.** El grupo minor/patch ya entró (9 paquetes,
+  verificado con la suite completa), y `@types/node` se resolvió aparte
+  alineándolo con el runtime en `^24` —no en el `^26` que proponía, que
+  pondría los tipos por delante de Node—, así que **el #7 hay que cerrarlo**.
+  Quedan: eslint 9→10 (#9) y TypeScript 5→7 (#8), **los dos con CI en rojo**;
+  y `gitleaks-action` 2→3 (#13) y `codeql-action` 3→4 (#12), en verde y de
+  bajo riesgo para la app. Los dos majors requieren trabajo propio.
 - **`gitleaks-action@v2` corre sobre Node 20**, que GitHub ya marcó como
   deprecado. No hay v3 todavía; es aviso, no error. Revisar de vez en cuando.
 
 ---
 
+## Salidos de la primera ronda de feedback (sept. 2026)
+
+- **`/api/version`.** Un route handler que devuelva `{ sha, env }`, con el
+  `GITHUB_SHA` pasado al `vercel build` desde `ci.yml`. Hoy saber qué commit
+  corre en sandbox o en prod es inferirlo por marcadores indirectos; con esto
+  es un `curl` por ambiente y comparar contra `git rev-parse origin/main`.
+  Chico, sin datos, y quita la pregunta «¿ya está desplegado?» para siempre.
+- **e2e con sesión inyectada.** Hoy los e2e solo prueban redirects: nada tras
+  el login se cubre, y tres veces en esta ronda hubo que montar páginas
+  temporales para ver un componente. La técnica ya está probada y funciona:
+  una cookie `sb-<ref>-auth-token` con `base64-` + JSON de sesión falsa, y
+  `page.route` interceptando `**/auth/v1/user`, `**/storage/v1/object/**` y
+  los `/api/*`. Falta convertirla en fixture de Playwright.
+- **Canonicalizar cada ambiente a un solo host.** Prod y sandbox responden en
+  dos hosts cada uno y las cookies son por host (ver `environments.md`). Hoy
+  se mitiga registrando ambos en Supabase; lo correcto es un redirect de la
+  larga a la corta. Antes: comprobar que el smoke test del CI sigue el
+  redirect, porque pega a la larga.
+- **Crear la tarjeta desde el PDF.** La «idea D» del deep dive: en Subir PDF,
+  una opción «es una tarjeta nueva, detectarla del archivo»; el parser saca
+  banco, nombre, últimos 4 y límite, y propone registrarla. El usuario nunca
+  teclea un banco. Se construye sobre la confirmación que ya existe
+  (`first_statement_mismatch`), pero necesita parsear **sin** cuenta, y el PDF
+  hoy se guarda en `{user_id}/{account_id}/…`: toca el esquema de rutas de
+  Storage y sus policies, que `storage-path.ts` acaba de blindar. Rama y
+  revisión propias.
+- **Herramientas en la máquina de desarrollo:** `gh`, `vercel` y el CLI de
+  Supabase. Sin ellos no se puede abrir un PR, leer un run, saber qué
+  deployment está activo ni sacar un dump desde la terminal. Los tres faltaron
+  en cada iteración de esta ronda.
+
+---
+
 ## Documentación
 
-- **`docs/environments.md`** tiene el checklist de setup manual con casillas sin
-  marcar. Cuando producción quede publicada, marcarlas para reflejar lo que de
-  verdad se hizo.
+- **`docs/environments.md`**: las casillas del checklist de setup ya están
+  marcadas. Lo que le falta es que la tabla de «cómo saber qué está desplegado
+  dónde» apunte a `/api/version` en cuanto exista.
