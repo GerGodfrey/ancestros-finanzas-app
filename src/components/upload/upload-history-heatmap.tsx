@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { MonthCoverage } from "@/lib/dashboard/get-upload-coverage";
+import { monthLongLabel } from "@/lib/month";
 
 const MONTH_LABELS_SHORT = [
   "Ene",
@@ -17,29 +18,9 @@ const MONTH_LABELS_SHORT = [
   "Nov",
   "Dic",
 ];
-const MONTH_LABELS_LONG = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
 function shortLabel(month: string): string {
   const m = Number(month.split("-")[1]);
   return MONTH_LABELS_SHORT[m - 1];
-}
-
-function longLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return `${MONTH_LABELS_LONG[m - 1]} ${y}`;
 }
 
 // 'YYYY-MM-DD' -> '22 ago' — para mostrar corte/pago sin ambigüedad de mes.
@@ -117,7 +98,7 @@ export function UploadHistoryHeatmap({
               key={m.month}
               type="button"
               onClick={() => setSelected(m.month)}
-              title={`${longLabel(m.month)}: ${m.uploadedCount}/${m.expectedCount}`}
+              title={`${monthLongLabel(m.month)}: ${m.uploadedCount}/${m.expectedCount}`}
               className={`flex h-8 w-10 items-center justify-center rounded-sm text-2xs font-medium transition ${bg} ${text} ${
                 selected === m.month
                   ? "ring-2 ring-accent"
@@ -133,7 +114,7 @@ export function UploadHistoryHeatmap({
       {selectedData && (
         <div className="mt-block border-t border-border pt-block">
           <p className="text-sm font-medium text-text">
-            {longLabel(selectedData.month)} — {selectedData.uploadedCount}/
+            {monthLongLabel(selectedData.month)} — {selectedData.uploadedCount}/
             {selectedData.expectedCount}
             {selectedData.percentage !== null &&
               ` (${Math.round(selectedData.percentage * 100)}%)`}

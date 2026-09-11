@@ -1,9 +1,11 @@
 import { getMonthlyDashboardData } from "@/lib/dashboard/get-monthly-data";
 import { getSetupState } from "@/lib/dashboard/get-setup-state";
+import { shouldWarnAboutMissingIncome } from "@/lib/dashboard/income-warning";
 import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { MonthNav } from "@/components/dashboard/month-nav";
-import { Badge } from "@/components/ui";
+import Link from "next/link";
+import { Badge, Button, Card } from "@/components/ui";
 
 export default async function DashboardPage({
   searchParams,
@@ -47,6 +49,30 @@ export default async function DashboardPage({
         pestañas: un dashboard vacío no orienta, y un usuario nuevo llega aquí
         sin saber por dónde empezar. Cuando los tres están hechos, desaparece.
       */}
+      {/*
+        Sin ingresos, el balance de arriba es el gasto del mes con signo
+        negativo — se lee como si estuvieras perdiendo dinero. Vale más decirlo
+        que mostrar una cifra que miente.
+      */}
+      {setup.complete &&
+        shouldWarnAboutMissingIncome({
+          hasData: data.hasData,
+          ingresoTotal: data.ingresoTotal,
+          egresoTotal: data.egresoTotal,
+        }) && (
+          <Card className="mb-block flex flex-wrap items-center justify-between gap-4 border-warning/40 bg-warning/10 p-4">
+            <p className="max-w-[62ch] text-sm leading-relaxed text-warning">
+              No tienes ingresos registrados este mes, así que tu balance solo
+              refleja lo que gastaste.
+            </p>
+            <Link href="/dashboard/upload#ingresos" className="shrink-0">
+              <Button size="sm" variant="ghost">
+                Registrar un ingreso
+              </Button>
+            </Link>
+          </Card>
+        )}
+
       {setup.complete ? (
         <DashboardTabs data={data} />
       ) : (

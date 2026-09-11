@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   MonthlyDashboardData,
   RelevantTransaction,
 } from "@/lib/dashboard/get-monthly-data";
-import { BudgetQuickAdd } from "./budget-quick-add";
 import { Badge, Button, Modal, Panel, Stat } from "@/components/ui";
 import {
   FlujoDelMesChart,
@@ -731,8 +731,22 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         <IngresosVsEgresosManualesChart data={data} />
       </Panel>
 
-      <Panel title="Agregar ingreso, costo fijo o deuda familiar/largo plazo">
-        {data.monthLabel && <BudgetQuickAdd month={data.monthLabel} />}
+      {/*
+        El formulario se mudó a «Actualiza tu mes»: aquí estaba tan enterrado
+        que los usuarios no sabían que podían capturar su sueldo. Queda el
+        puntero para quien ya lo tenía ubicado en esta pestaña.
+      */}
+      <Panel title="Ingresos, costos fijos y deudas">
+        <p className="text-sm leading-relaxed text-text-muted">
+          Se capturan en{" "}
+          <Link
+            href="/dashboard/upload#ingresos"
+            className="text-accent underline underline-offset-2"
+          >
+            Actualiza tu mes
+          </Link>
+          , junto con el estado de cuenta.
+        </p>
       </Panel>
     </div>
   );
