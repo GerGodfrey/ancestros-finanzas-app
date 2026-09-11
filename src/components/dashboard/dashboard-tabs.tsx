@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { shouldWarnAboutMissingIncome } from "@/lib/dashboard/income-warning";
 import type {
   MonthlyDashboardData,
   RelevantTransaction,
 } from "@/lib/dashboard/get-monthly-data";
-import { BudgetQuickAdd } from "./budget-quick-add";
-import { Badge, Button, Modal, Panel, Stat } from "@/components/ui";
+import { Badge, Button, EmptySlot, Modal, Panel, Stat } from "@/components/ui";
 import {
   FlujoDelMesChart,
   GastoPorCategoriaChart,
@@ -445,9 +446,26 @@ function ResumenTab({ data }: { data: MonthlyDashboardData }) {
           sub={
             data.incomes.length > 0
               ? data.incomes.map((i) => i.concept).join(", ")
-              : "Sin ingresos capturados este mes"
+              : undefined
           }
           tone="good"
+          // Sin ingresos, esta cifra no es «cero neto»: es un dato que falta, y
+          // el balance de al lado hereda la mentira. El hueco va aquí dentro y
+          // no en un aviso aparte — el dashboard ya tiene demasiadas cajas.
+          slot={
+            shouldWarnAboutMissingIncome({
+              hasData: data.hasData,
+              ingresoTotal: data.ingresoTotal,
+              egresoTotal: data.egresoTotal,
+            }) ? (
+              <EmptySlot
+                href="/dashboard/upload#ingresos"
+                action="Da click para agregar ingreso"
+              >
+                Tu balance solo refleja lo que gastaste.
+              </EmptySlot>
+            ) : undefined
+          }
         />
         <Stat
           label="Egreso Total"
@@ -731,8 +749,22 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         <IngresosVsEgresosManualesChart data={data} />
       </Panel>
 
-      <Panel title="Agregar ingreso, costo fijo o deuda familiar/largo plazo">
-        {data.monthLabel && <BudgetQuickAdd month={data.monthLabel} />}
+      {/*
+        El formulario vive completo en «Actualiza tu mes», con su selector de
+        mes. Aquí solo el puntero: tenerlo en dos sitios obligaba a aprender
+        qué se capturaba en cada uno.
+      */}
+      <Panel title="Ingresos, costos fijos y deudas">
+        <p className="text-sm leading-relaxed text-text-muted">
+          Se capturan en{" "}
+          <Link
+            href="/dashboard/upload#ingresos"
+            className="text-accent underline underline-offset-2"
+          >
+            Actualiza tu mes
+          </Link>
+          , y ahí puedes elegir a qué mes van.
+        </p>
       </Panel>
     </div>
   );

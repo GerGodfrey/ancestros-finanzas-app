@@ -1,24 +1,5 @@
 import type { MonthCoverage } from "@/lib/dashboard/get-upload-coverage";
-
-const MONTH_LABELS = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
-function longLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return `${MONTH_LABELS[m - 1]} ${y}`;
-}
+import { monthLongLabel } from "@/lib/month";
 
 export function PendingThisMonth({ data }: { data: MonthCoverage | null }) {
   if (!data || data.expectedCount === 0) return null;
@@ -38,8 +19,8 @@ export function PendingThisMonth({ data }: { data: MonthCoverage | null }) {
         className={`font-semibold ${allDone ? "text-positive" : "text-warning"}`}
       >
         {allDone
-          ? `Ya subiste todos los estados de cuenta de ${longLabel(data.month)} (${data.uploadedCount}/${data.expectedCount}).`
-          : `Te falta subir ${missing.length} de ${data.expectedCount} estados de cuenta de ${longLabel(data.month)}.`}
+          ? `Ya subiste todos los estados de cuenta de ${monthLongLabel(data.month)} (${data.uploadedCount}/${data.expectedCount}).`
+          : `Te falta subir ${missing.length} de ${data.expectedCount} estados de cuenta de ${monthLongLabel(data.month)}.`}
       </p>
       {!allDone && (
         <ul className="mt-2 list-inside list-disc text-warning">

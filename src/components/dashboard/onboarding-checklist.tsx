@@ -16,6 +16,8 @@ interface Step {
   done: boolean;
   /** Se muestra pero no se puede empezar todavía. */
   blockedBy?: string;
+  /** Recomendado, no obligatorio: no impide que el checklist se cierre. */
+  optional?: boolean;
   href: string;
   cta: string;
 }
@@ -47,12 +49,22 @@ function buildSteps(state: SetupState): Step[] {
       href: "/dashboard/upload",
       cta: "Subir un PDF",
     },
+    {
+      n: 4,
+      title: "Registra tus ingresos del mes",
+      why: "Tu sueldo no viene en el estado de cuenta. Sin él, el balance solo muestra lo que gastaste, nunca lo que te quedó.",
+      done: state.hasIncome,
+      optional: true,
+      href: "/dashboard/upload#ingresos",
+      cta: "Registrar un ingreso",
+    },
   ];
 }
 
 export function OnboardingChecklist({ state }: { state: SetupState }) {
   const steps = buildSteps(state);
-  const doneCount = steps.filter((s) => s.done).length;
+  const required = steps.filter((s) => !s.optional);
+  const doneCount = required.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done && !s.blockedBy);
 
   return (
@@ -60,7 +72,7 @@ export function OnboardingChecklist({ state }: { state: SetupState }) {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-light tracking-tight">
-            Tres pasos para ver tu primer mes
+            Para ver tu primer mes
           </h2>
           <p className="mt-tight max-w-[62ch] text-sm leading-relaxed text-text-muted">
             Tu dashboard se llena solo a partir del primer estado de cuenta de
@@ -68,7 +80,7 @@ export function OnboardingChecklist({ state }: { state: SetupState }) {
           </p>
         </div>
         <span className="font-mono text-2xs tabular-nums text-text-faint">
-          {doneCount} de {steps.length}
+          {doneCount} de {required.length} obligatorios
         </span>
       </div>
 
@@ -104,6 +116,11 @@ export function OnboardingChecklist({ state }: { state: SetupState }) {
                       {step.title}
                     </h3>
                     {step.done && <Badge tone="good">Listo</Badge>}
+                    {!step.done && step.optional && (
+                      <span className="rounded border border-border px-1.5 py-0.5 text-2xs uppercase tracking-[0.08em] text-text-faint">
+                        Recomendado
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 max-w-[58ch] text-xs leading-relaxed">
                     {step.blockedBy ?? step.why}

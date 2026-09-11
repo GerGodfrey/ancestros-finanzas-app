@@ -35,6 +35,44 @@ De ahí se derivan las tres reglas duras del sistema:
    que sí cargan sentido.
 3. **El emoji es presentación, jamás dato ni condición.** Detalle abajo.
 
+### El cuarto color: `--action`, el escarlata del hueco
+
+Las tres reglas de arriba describen colores que hablan de lo que **pasó** con tu
+dinero. Falta un caso que no es eso: un dato que **todavía no existe** y que sin
+él una cifra miente. El "Ingreso Total" en $0.00 no es un cero: es una pregunta
+sin responder, y el balance de al lado hereda esa mentira.
+
+Eso se marca con `--action`, un escarlata propio —matiz 38 en Papel y 42 en
+Plano, contra el 27 del `--negative` y el 70/75 del `--warning`—. Es un color
+más en un sistema que presume de tener pocos, y se justifica porque el caso que
+marca no es ninguno de los tres: "te falta un dato" no es ganancia, ni pérdida,
+ni advertencia sobre el dinero. Habla del producto, no de tus finanzas.
+
+Se usa a través de `<EmptySlot/>` (`src/components/ui/empty-slot.tsx`), dentro
+de la caja a la que le falta el dato: una etiqueta **SIN USO** arriba, la cifra
+en neutro, y debajo la acción en blanco y negritas —redactada como instrucción
+("Da click para agregar ingreso"), no como etiqueta—, con la consecuencia en
+gris chico.
+
+Cinco restricciones que no se negocian:
+
+- **Se ve siempre.** La primera versión lo escondía detrás del hover, con la
+  caja en gris hasta que pasabas el cursor. Pasaba desapercibida — y en celular
+  no hay cursor. Si la señal solo existe en hover, no existe.
+- **No es una caja nueva.** Vive *dentro* del elemento al que le falta el dato.
+  El dashboard ya es una pila de rectángulos; una categoría visual nueva no se
+  crea agregando el siguiente.
+- **El riel se apaga, no se enciende.** Probado en contexto: un riel escarlata
+  cae junto a los rojos de Egreso y Balance y la fila entera se lee como "tres
+  tarjetas en rojo". En gris, la tarjeta se lee apagada —que es lo que es— y el
+  escarlata de adentro queda como el único color caliente de la fila.
+- **El escarlata se concentra en un solo sitio: la etiqueta.** La acción va en
+  blanco. Dos cosas en escarlata dentro de la misma caja se reparten la
+  atención en vez de sumarla, y la que tiene que ganar es la etiqueta.
+- **Mientras haya hueco, la cifra va en neutro.** `Stat` lo hace solo: un
+  "$0.00" en verde afirma algo falso. El color del dinero vuelve cuando hay
+  dinero que colorear.
+
 ---
 
 ## Los cuatro modos

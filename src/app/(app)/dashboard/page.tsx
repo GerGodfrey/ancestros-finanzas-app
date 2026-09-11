@@ -47,6 +47,7 @@ export default async function DashboardPage({
         pestañas: un dashboard vacío no orienta, y un usuario nuevo llega aquí
         sin saber por dónde empezar. Cuando los tres están hechos, desaparece.
       */}
+
       {setup.complete ? (
         <DashboardTabs data={data} />
       ) : (

@@ -12,7 +12,9 @@ export interface SetupState {
   hasAccount: boolean;
   /** Hay al menos un estado de cuenta ya parseado. */
   hasStatement: boolean;
-  /** Los tres a la vez: el checklist no hace falta. */
+  /** Hay al menos un ingreso capturado a mano. */
+  hasIncome: boolean;
+  /** Los tres primeros a la vez: el checklist no hace falta. */
   complete: boolean;
 }
 
@@ -21,6 +23,10 @@ export function resolveSetupState(
 ): SetupState {
   return {
     ...flags,
+    // `hasIncome` NO entra en `complete` a propósito: es un paso recomendado,
+    // no un requisito. Sin ingresos la app funciona —muestra gastos— y
+    // bloquear el dashboard por eso sería castigar a quien solo quiere ver
+    // sus tarjetas. El aviso de $0 del dashboard se encarga de insistir.
     complete: flags.hasProvider && flags.hasAccount && flags.hasStatement,
   };
 }
@@ -28,7 +34,7 @@ export function resolveSetupState(
 export async function getSetupState(): Promise<SetupState> {
   const supabase = await createClient();
 
-  const [credentials, accounts, statements] = await Promise.all([
+  const [credentials, accounts, statements, incomes] = await Promise.all([
     // Se traen las filas y no un count porque una credencial ilegible
     // (ENCRYPTION_KEY rotada) no cuenta como "IA conectada": el usuario tiene
     // que volver a guardarla, y el checklist debe seguir señalándolo.
@@ -38,6 +44,7 @@ export async function getSetupState(): Promise<SetupState> {
       .from("statements")
       .select("id", { count: "exact", head: true })
       .eq("status", "parsed"),
+    supabase.from("incomes").select("id", { count: "exact", head: true }),
   ]);
 
   const hasProvider = (credentials.data ?? []).some(
@@ -48,5 +55,6 @@ export async function getSetupState(): Promise<SetupState> {
     hasProvider,
     hasAccount: (accounts.count ?? 0) > 0,
     hasStatement: (statements.count ?? 0) > 0,
+    hasIncome: (incomes.count ?? 0) > 0,
   });
 }

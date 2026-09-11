@@ -6,7 +6,7 @@ import { Button } from "@/components/ui";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard/upload", label: "Subir PDF" },
+  { href: "/dashboard/upload", label: "Actualiza tu mes" },
   { href: "/dashboard/chat", label: "Chat" },
   { href: "/settings", label: "Configuración" },
 ] as const;

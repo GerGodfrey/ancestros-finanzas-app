@@ -34,6 +34,7 @@
   --papel-accent-ink:       oklch(98% 0.003 250);
   --papel-positive:         oklch(45% 0.12 155);
   --papel-negative:         oklch(53% 0.19 27);
+  --papel-action:           oklch(58% 0.21 38);
   --papel-warning:          oklch(52% 0.13 70);
   --papel-scrim:            oklch(22% 0.012 255 / 0.38);
 
@@ -62,6 +63,7 @@
   --plano-accent-ink:       oklch(16% 0.02 250);
   --plano-positive:         oklch(76% 0.13 155);
   --plano-negative:         oklch(72% 0.16 27);
+  --plano-action:           oklch(74% 0.22 42);
   --plano-warning:          oklch(80% 0.13 75);
   --plano-scrim:            oklch(0% 0 0 / 0.68);
 
@@ -90,6 +92,7 @@
   --accent-ink:       var(--papel-accent-ink);
   --positive:         var(--papel-positive);
   --negative:         var(--papel-negative);
+  --action:           var(--papel-action);
   --warning:          var(--papel-warning);
   --scrim:            var(--papel-scrim);
 
@@ -126,6 +129,7 @@
     --accent-ink:       var(--plano-accent-ink);
     --positive:         var(--plano-positive);
     --negative:         var(--plano-negative);
+    --action:           var(--plano-action);
     --warning:          var(--plano-warning);
     --scrim:            var(--plano-scrim);
 
@@ -160,6 +164,7 @@
   --positive:         var(--plano-positive);
   --negative:         var(--plano-negative);
   --warning:          var(--plano-warning);
+  --action:           var(--plano-action);
   --scrim:            var(--plano-scrim);
 
   --cat-comida:               var(--plano-cat-comida);
@@ -195,6 +200,7 @@
   --color-accent-ink:       var(--accent-ink);
   --color-positive:         var(--positive);
   --color-negative:         var(--negative);
+  --color-action:           var(--action);
   --color-warning:          var(--warning);
   --color-scrim:            var(--scrim);
 
