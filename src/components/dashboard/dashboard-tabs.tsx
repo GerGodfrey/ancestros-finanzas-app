@@ -671,8 +671,15 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
 
       <Panel title="Desglose de Ingresos">
         {data.incomes.length === 0 ? (
-          <p className="text-sm text-text-faint">
-            Todavía no capturas ingresos para este mes.
+          <p className="text-sm leading-relaxed text-text-faint">
+            Todavía no capturas ingresos para este mes. Se agregan en{" "}
+            <Link
+              href="/dashboard/upload#ingresos"
+              className="text-accent underline underline-offset-2"
+            >
+              Actualiza tu mes
+            </Link>
+            .
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
@@ -701,8 +708,15 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
 
       <Panel title="Desglose de Egresos Fijos (débito)">
         {data.fixedCosts.length === 0 ? (
-          <p className="text-sm text-text-faint">
-            Todavía no capturas costos fijos para este mes.
+          <p className="text-sm leading-relaxed text-text-faint">
+            Todavía no capturas costos fijos para este mes. Se agregan en{" "}
+            <Link
+              href="/dashboard/upload#ingresos"
+              className="text-accent underline underline-offset-2"
+            >
+              Actualiza tu mes
+            </Link>
+            .
           </p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
@@ -749,23 +763,6 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
         <IngresosVsEgresosManualesChart data={data} />
       </Panel>
 
-      {/*
-        El formulario vive completo en «Actualiza tu mes», con su selector de
-        mes. Aquí solo el puntero: tenerlo en dos sitios obligaba a aprender
-        qué se capturaba en cada uno.
-      */}
-      <Panel title="Ingresos, costos fijos y deudas">
-        <p className="text-sm leading-relaxed text-text-muted">
-          Se capturan en{" "}
-          <Link
-            href="/dashboard/upload#ingresos"
-            className="text-accent underline underline-offset-2"
-          >
-            Actualiza tu mes
-          </Link>
-          , y ahí puedes elegir a qué mes van.
-        </p>
-      </Panel>
     </div>
   );
 }
