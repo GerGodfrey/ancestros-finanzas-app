@@ -52,7 +52,12 @@ interface FloatingBill {
   texIndex: number;
 }
 
-export function BillsBackground() {
+/**
+ * @param density Multiplica la cantidad de billetes. Default 1 = como en
+ *   /login. La hoja de Inicio la baja porque lleva mucho más texto y no
+ *   deben competir con la lectura.
+ */
+export function BillsBackground({ density = 1 }: { density?: number } = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,7 +111,8 @@ export function BillsBackground() {
     );
     const bills: FloatingBill[] = [];
 
-    for (let i = 0; i < BILL_COUNT; i++) {
+    const billCount = Math.max(6, Math.round(BILL_COUNT * density));
+    for (let i = 0; i < billCount; i++) {
       const texIndex = i % texturesColor.length;
       const tex = texturesColor[texIndex];
       const scale = 1.5 + Math.random() * 0.95;
@@ -293,7 +299,7 @@ export function BillsBackground() {
         container.removeChild(renderer.domElement);
       }
     };
-  }, []);
+  }, [density]);
 
   return (
     <div ref={containerRef} className="absolute inset-0" aria-hidden="true" />

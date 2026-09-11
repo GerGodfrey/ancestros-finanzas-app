@@ -11,6 +11,11 @@ test.describe("Redirects de autenticación (sin sesión)", () => {
     await expect(page).toHaveURL(/\/login$/);
   });
 
+  test("/inicio redirige a /login", async ({ page }) => {
+    await page.goto("/inicio");
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
   test("/settings redirige a /login", async ({ page }) => {
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/login$/);

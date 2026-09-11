@@ -36,7 +36,7 @@ export async function proxy(request: NextRequest) {
     user = null;
   }
 
-  const protectedPrefixes = ["/dashboard", "/settings"];
+  const protectedPrefixes = ["/inicio", "/dashboard", "/settings"];
   const isProtected = protectedPrefixes.some((p) =>
     request.nextUrl.pathname.startsWith(p),
   );

@@ -7,7 +7,8 @@ Procedimientos operativos. Para el mapa de ambientes ver
 ## Cómo fluye un cambio
 
 ```
-rama → PR → CI (lint+tipos, unit, build, e2e, seguridad)
+rama → LOCALHOST: lo prueba el humano  ← nada sale de aquí sin su visto bueno
+     → push + PR → CI (lint+tipos, unit, build, e2e, seguridad)
                     │ merge a main
                     ▼
         migra sandbox → deploy sandbox → smoke
@@ -19,6 +20,23 @@ rama → PR → CI (lint+tipos, unit, build, e2e, seguridad)
 
 Producción es siempre una **promoción del mismo commit** que ya se verificó en
 sandbox, nunca un build distinto.
+
+## El paso cero: localhost
+
+**Antes de empujar la rama, lo prueba una persona en `npm run dev`.** No es
+una regla del pipeline —el CI empieza en el push y no puede ver tu máquina—,
+es un acuerdo, y por eso se escribe aquí en lugar de en `ci.yml`.
+
+Existe porque las pruebas automáticas y las capturas contestan «¿funciona?»,
+no «¿es esto lo que querías?». Una hoja puede pasar los 136 tests, verse bien
+en las dos temáticas, y estar resolviendo el problema equivocado. Eso ya pasó:
+una hoja de Inicio construida como landing pública en `/`, modificando
+`/login`, cuando lo pedido era una pantalla nueva para usuarios con sesión.
+
+Empujar la rama no despliega nada —solo `main` dispara el pipeline— pero
+mandar el enlace del PR junto con el trabajo empuja a mergear sin mirar. La
+secuencia es: implementar → verificar → **enseñarlo y esperar** → empujar y
+abrir el PR.
 
 ## Promover a producción
 

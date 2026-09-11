@@ -18,8 +18,10 @@ export function NavBar({ userEmail }: { userEmail?: string | null }) {
     <header className="border-b border-border bg-surface px-6">
       <div className="flex flex-wrap items-center justify-between gap-x-6">
         <div className="flex flex-wrap items-center gap-x-6">
+          {/* A la hoja de Inicio, no al dashboard. El enlace «Dashboard» de
+              al lado conserva el atajo para quien solo quiere sus datos. */}
           <Link
-            href="/dashboard"
+            href="/inicio"
             className="py-4 text-2xs font-semibold uppercase tracking-[0.11em] text-text transition-colors hover:text-text-muted"
           >
             Finanzas
