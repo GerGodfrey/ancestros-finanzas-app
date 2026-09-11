@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { MonthlyInsight, Recommendation } from "@/lib/ai/monthly-insights";
+import { resolveDashboardMonths } from "./resolve-months";
 import {
   isTransactionCategory,
   type TransactionCategory,
@@ -85,7 +86,7 @@ export interface StatusBadge {
 export interface MonthlyDashboardData {
   hasData: boolean;
   monthLabel: string | null; // 'YYYY-MM-01'
-  availableMonths: string[]; // 'YYYY-MM', ascending, meses con al menos un statement parseado
+  availableMonths: string[]; // 'YYYY-MM', ascending, meses con statement parseado o dinero capturado a mano
   statusBadge: StatusBadge | null;
   ingresoTotal: number;
   egresoDebito: number;
@@ -156,10 +157,6 @@ const EMPTY_DATA: MonthlyDashboardData = {
 
 function monthKey(dateStr: string): string {
   return dateStr.slice(0, 7); // 'YYYY-MM'
-}
-
-function firstOfMonth(dateStr: string): string {
-  return `${monthKey(dateStr)}-01`;
 }
 
 // Regla dura: el dashboard de un mes solo puede mostrar datos extraídos del
@@ -269,9 +266,10 @@ export async function getMonthlyDashboardData(
     .select("id, issuer, product_name, credit_limit, rate_ordinaria")
     .eq("user_id", user.id);
 
-  if (!accounts || accounts.length === 0) return EMPTY_DATA;
-
-  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  // Sin tarjetas ya no se corta aquí. Se puede tener ingresos y costos fijos
+  // capturados a mano sin haber dado de alta una sola tarjeta, y cortar en
+  // este punto los escondía.
+  const accountById = new Map((accounts ?? []).map((a) => [a.id, a]));
 
   const { data: parsedStatements } = await supabase
     .from("statements")
@@ -283,17 +281,28 @@ export async function getMonthlyDashboardData(
     .not("period_end", "is", null)
     .order("period_end", { ascending: false });
 
-  if (!parsedStatements || parsedStatements.length === 0) return EMPTY_DATA;
+  // Los meses no salen solo de los PDFs: un ingreso o un costo fijo capturado
+  // a mano también hace que un mes exista. Ver resolve-months.ts — ahí está el
+  // bug que esto arregla.
+  const [{ data: incomeMonths }, { data: fixedCostMonths }] = await Promise.all([
+    supabase.from("incomes").select("month").eq("user_id", user.id),
+    supabase.from("fixed_costs").select("month").eq("user_id", user.id),
+  ]);
 
-  const availableMonths = Array.from(
-    new Set(parsedStatements.map((s) => monthKey(s.period_end as string))),
-  ).sort();
+  const { month, availableMonths } = resolveDashboardMonths({
+    statementMonths: (parsedStatements ?? []).map((s) =>
+      monthKey(s.period_end as string),
+    ),
+    manualMonths: [...(incomeMonths ?? []), ...(fixedCostMonths ?? [])]
+      .map((r) => (r.month ? monthKey(r.month as string) : null))
+      .filter((m): m is string => m !== null),
+    targetMonth,
+  });
 
-  const month =
-    targetMonth ?? firstOfMonth(parsedStatements[0].period_end as string);
+  if (month === null) return EMPTY_DATA;
   const monthPrefix = month.slice(0, 7);
 
-  const statementsInMonthRaw = parsedStatements.filter(
+  const statementsInMonthRaw = (parsedStatements ?? []).filter(
     (s) => s.period_end && monthKey(s.period_end as string) === monthPrefix,
   );
 
@@ -324,13 +333,18 @@ export async function getMonthlyDashboardData(
     duplicateStatementGroups.push({ accountId, dropped: sorted.slice(1) });
   }
 
-  // Regla dura: si no hay ni un statement parseado para el mes que se está
-  // viendo, el dashboard no muestra nada de ese mes — ni siquiera paneles
-  // "en vivo" (MSI, domiciliaciones, deudas) que antes se mostraban sin
-  // importar el mes. Sin PDF de este mes, no hay nada que mostrar.
-  if (statementsInMonth.length === 0) {
-    return { ...EMPTY_DATA, hasData: false, monthLabel: month, availableMonths };
-  }
+  // Regla dura, ahora más estrecha. Seguía siendo cierto que sin PDF de este
+  // mes no se deben mostrar los paneles "en vivo" que no están atados al mes
+  // (MSI, domiciliaciones, deudas): pintarían saldos de otro periodo como si
+  // fueran de este. Lo que no era cierto es que no hubiera "nada que mostrar" —
+  // los ingresos y costos fijos capturados a mano sí son de este mes, y cortar
+  // aquí los escondía por completo. El usuario capturaba un ingreso y no
+  // aparecía en ningún lado.
+  //
+  // Ya no se corta: sin statements, `cards` queda vacío y `gastoTarjetas` en 0
+  // por su propio cálculo, así que la ruta normal produce justo el dashboard
+  // parcial que se quiere. Solo hay que apagar los paneles sin mes.
+  const hasStatementsThisMonth = statementsInMonth.length > 0;
 
   const [
     { data: incomes },
@@ -402,7 +416,7 @@ export async function getMonthlyDashboardData(
   // "Estado" de Estado de Tarjetas) ---
   const [prevYear, prevM] = monthPrefix.split("-").map(Number);
   const previousMonthPrefix = `${prevM === 1 ? prevYear - 1 : prevYear}-${String(prevM === 1 ? 12 : prevM - 1).padStart(2, "0")}`;
-  const previousMonthStatements = parsedStatements.filter(
+  const previousMonthStatements = (parsedStatements ?? []).filter(
     (s) => s.period_end && monthKey(s.period_end as string) === previousMonthPrefix,
   );
   const previousMonthCardsTotal =
@@ -713,7 +727,14 @@ export async function getMonthlyDashboardData(
     : { text: "Balance positivo este mes", tone: "good" };
 
   return {
-    hasData: true,
+    // Un mes tiene datos si trae statement o si trae dinero capturado a mano.
+    // Con `targetMonth` puesto a pelo en la URL se puede llegar a un mes sin
+    // nada de nada, y ahí el dashboard debe decir que está vacío en vez de
+    // pintar una fila de ceros como si fueran cifras reales.
+    hasData:
+      hasStatementsThisMonth ||
+      (incomes ?? []).length > 0 ||
+      (fixedCosts ?? []).length > 0,
     monthLabel: month,
     availableMonths,
     statusBadge,
@@ -741,7 +762,7 @@ export async function getMonthlyDashboardData(
       isRecurring: Boolean(f.is_recurring),
     })),
     msiPlans,
-    recurringCharges,
+    recurringCharges: hasStatementsThisMonth ? recurringCharges : [],
     relevantTransactionsByAccount,
     categoryBreakdown,
     uncategorizedCount,
@@ -752,6 +773,6 @@ export async function getMonthlyDashboardData(
       (monthlySummary?.recommendations as Recommendation[] | null) ?? null,
     previousMonthCardsTotal,
     msiDebts,
-    standingDebts,
+    standingDebts: hasStatementsThisMonth ? standingDebts : [],
   };
 }
