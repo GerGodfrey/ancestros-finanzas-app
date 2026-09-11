@@ -64,7 +64,15 @@ test.describe("Cerrar sesión", () => {
 test.describe("/api/version", () => {
   // Es la etiqueta que dice qué commit corre en cada ambiente. Pública a
   // propósito y sin caché: la gracia es que diga lo que corre AHORA.
-  test("responde sin sesión, sin caché, y con env=local fuera del CI", async ({
+  //
+  // OJO: este archivo corre dos veces con la misma spec — contra `next dev`
+  // en el job de e2e, y contra el sandbox/prod desplegado como smoke test
+  // (PLAYWRIGHT_BASE_URL). Un test que afirme valores solo ciertos en local
+  // rompe el pipeline en el smoke; ya pasó. Aquí se afirma el contrato que
+  // vale en los dos, y lo que cambia entre ellos se afirma por separado.
+  const deployed = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+
+  test("responde sin sesión, sin caché, y con un SHA coherente", async ({
     request,
   }) => {
     const res = await request.get("/api/version");
@@ -72,6 +80,28 @@ test.describe("/api/version", () => {
     expect(res.headers()["cache-control"]).toContain("no-store");
 
     const body = await res.json();
-    expect(body).toMatchObject({ env: "local", sha: null, short: null });
+    expect(["local", "sandbox", "prod"]).toContain(body.env);
+
+    if (body.sha === null) {
+      expect(body.short).toBeNull();
+    } else {
+      expect(body.sha).toMatch(/^[0-9a-f]{40}$/);
+      expect(body.short).toBe(body.sha.slice(0, 7));
+    }
   });
+
+  test(
+    deployed
+      ? "en un ambiente desplegado trae el SHA: si falta, el CI no inyectó las variables"
+      : "en local reporta env=local sin SHA",
+    async ({ request }) => {
+      const body = await (await request.get("/api/version")).json();
+      if (deployed) {
+        expect(body.env).not.toBe("local");
+        expect(body.sha).not.toBeNull();
+      } else {
+        expect(body).toMatchObject({ env: "local", sha: null, short: null });
+      }
+    },
+  );
 });
