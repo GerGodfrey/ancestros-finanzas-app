@@ -115,17 +115,60 @@ export async function POST(
   // de subirlo — si no, el statement se rechaza en vez de guardarse bajo la
   // cuenta equivocada (pasó en producción: un PDF de Amex quedó mezclado con
   // Palacio de Hierro porque el usuario seleccionó la tarjeta incorrecta).
+  const extractedIssuer = typeof a.issuer === "string" ? a.issuer : null;
+  const extractedLast4 = typeof a.last4 === "string" ? a.last4 : null;
+  const extractedProduct =
+    typeof a.product_name === "string" ? a.product_name : null;
+
   const accountMatch = checkStatementMatchesAccount({
-    extractedIssuer: typeof a.issuer === "string" ? a.issuer : null,
-    extractedLast4: typeof a.last4 === "string" ? a.last4 : null,
+    extractedIssuer,
+    extractedLast4,
     accountIssuer: targetAccount.issuer,
     accountLast4: targetAccount.last4,
   });
   if (!accountMatch.ok) {
     await supabase.from("statements").update({ status: "error" }).eq("id", id);
+
+    // El guard protege el historial: que un PDF de otra tarjeta no se mezcle
+    // con el de esta. Pero en el PRIMER estado de cuenta de una tarjeta no hay
+    // historial que proteger, y el dato que suele estar mal es el de la
+    // tarjeta —lo tecleó una persona— no el del PDF, que lo dice el banco.
+    // Un cliente escribió «nana» donde iba «Nu» y se quedó sin salida.
+    //
+    // Así que si es el primero, en vez de un rechazo se devuelve la decisión:
+    // qué dice el PDF y qué dice la tarjeta, para que la UI pregunte «¿es la
+    // misma?» y, con consentimiento, actualice la tarjeta y reintente. Con
+    // historial, el rechazo se queda igual que siempre.
+    const { count: parsedBefore } = await supabase
+      .from("statements")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", statement.account_id)
+      .eq("status", "parsed");
+
+    if ((parsedBefore ?? 0) === 0) {
+      return NextResponse.json(
+        {
+          code: "first_statement_mismatch",
+          error: `Este PDF es de ${extractedIssuer ?? "otro banco"}${extractedLast4 ? ` ···· ${extractedLast4}` : ""}, y la tarjeta que elegiste se llama «${targetAccount.issuer}».`,
+          extracted: {
+            issuer: extractedIssuer,
+            last4: extractedLast4,
+            productName: extractedProduct,
+          },
+          account: {
+            id: statement.account_id,
+            issuer: targetAccount.issuer,
+            last4: targetAccount.last4,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
-        error: `Este PDF no parece ser de la tarjeta seleccionada: ${accountMatch.errors.join(" ")} Verifica que elegiste la tarjeta correcta antes de subir el PDF.`,
+        code: "account_mismatch",
+        error: `Este PDF no parece ser de la tarjeta seleccionada. ${accountMatch.errors.join(" ")} Esta tarjeta ya tiene estados de cuenta guardados, así que no se puede cambiar desde aquí: elige la tarjeta correcta, o edita esta en Configuración → Tarjetas.`,
       },
       { status: 400 },
     );

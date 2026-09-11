@@ -15,12 +15,35 @@
 // dice "Amex" pero el PDF dice "American Express"). No es exhaustivo — para
 // emisores fuera de esta lista, el match cae en comparación por texto
 // normalizado (igual o uno contiene al otro).
+//
+// Cada emisor de src/lib/issuers.ts tiene que aparecer aquí con las formas en
+// que su PDF lo nombra; si no, el guard rechaza un estado legítimo.
 const ISSUER_ALIAS_GROUPS: string[][] = [
+  ["nu", "nu mexico", "nu bank", "nubank", "nu financiera"],
+  ["bbva", "bbva bancomer", "bancomer", "bbva mexico"],
+  ["banamex", "citibanamex", "citi banamex", "banco nacional de mexico"],
+  ["banorte", "banco mercantil del norte"],
+  ["santander", "banco santander", "santander mexico"],
   ["amex", "american express"],
-  ["banamex", "citibanamex", "citi banamex"],
-  ["bbva", "bbva bancomer", "bancomer"],
-  ["scotiabank", "scotia"],
-  ["palacio de hierro", "palacio"],
+  ["stori", "storicard", "stori card"],
+  ["hsbc", "hsbc mexico"],
+  ["scotiabank", "scotia", "scotiabank inverlat"],
+  ["klar"],
+  ["banco azteca", "azteca"],
+  ["bancoppel", "coppel"],
+  ["inbursa", "banco inbursa"],
+  ["liverpool", "liverpool premium card", "dilisa"],
+  ["palacio de hierro", "palacio", "el palacio de hierro"],
+  ["hey banco", "hey", "banregio", "banco regional"],
+  ["mercado pago", "mercadopago"],
+  ["rappicard", "rappi", "rappi card"],
+  ["afirme", "banca afirme"],
+  ["banbajio", "banco del bajio"],
+  ["uala", "uala mexico"],
+  ["plata", "plata card"],
+  ["suburbia"],
+  ["sears"],
+  ["sanborns"],
 ];
 
 function normalize(value: string): string {

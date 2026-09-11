@@ -13,7 +13,15 @@ type Account = {
   last4: string | null;
 };
 
-type Step = "idle" | "uploading" | "parsing" | "done" | "error";
+type Step = "idle" | "uploading" | "parsing" | "confirm" | "done" | "error";
+
+/** Lo que devuelve el parse cuando es el primer PDF de la tarjeta y no
+ *  coincide: qué dice el PDF y qué dice la tarjeta, para preguntar. */
+type Mismatch = {
+  statementId: string;
+  extracted: { issuer: string | null; last4: string | null; productName: string | null };
+  account: { id: string; issuer: string; last4: string | null };
+};
 
 /** "Palacio de Hierro — Platinum ···· 6280". Sin los últimos 4, dos tarjetas
  *  del mismo emisor son indistinguibles en el selector. */
@@ -46,6 +54,7 @@ export function StatementUpload() {
   const [step, setStep] = useState<Step>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [mismatch, setMismatch] = useState<Mismatch | null>(null);
 
   async function loadAccounts() {
     try {
@@ -81,7 +90,7 @@ export function StatementUpload() {
     setFile(f);
   }
 
-  const busy = step === "uploading" || step === "parsing";
+  const busy = step === "uploading" || step === "parsing" || step === "confirm";
 
   async function handleUpload() {
     if (!file || !accountId) return;
@@ -110,27 +119,96 @@ export function StatementUpload() {
       const createData = await createRes.json();
       if (!createRes.ok) throw new Error(createData.error);
 
-      setStep("parsing");
-      const parseRes = await fetch(
-        `/api/statements/${createData.statement.id}/parse`,
-        { method: "POST" },
-      );
-      const parseData = await parseRes.json();
-      if (!parseRes.ok) throw new Error(parseData.error);
-
-      setStep("done");
-      setMessage(
-        `Listo: ${parseData.transactionsInserted} movimientos y ${parseData.msiPlans} planes MSI guardados.`,
-      );
-      setWarnings(parseData.warnings ?? []);
-      setFile(null);
-      // Refresca los paneles server-rendered de la página (pendientes del
-      // mes, historial) para que reflejen el statement recién parseado.
-      router.refresh();
+      await runParse(createData.statement.id);
     } catch (err) {
       setStep("error");
       setMessage(err instanceof Error ? err.message : "Error desconocido");
     }
+  }
+
+  // Separado de la subida para poder reintentarlo sobre el mismo statement
+  // después de corregir la tarjeta, sin volver a subir el archivo.
+  async function runParse(statementId: string) {
+    setStep("parsing");
+    const parseRes = await fetch(`/api/statements/${statementId}/parse`, {
+      method: "POST",
+    });
+    const parseData = await parseRes.json();
+
+    // Primer PDF de la tarjeta y no coincide: no es un error, es una
+    // pregunta. El servidor ya decidió que es seguro preguntar (no hay
+    // historial que contaminar); aquí solo se muestra.
+    if (parseRes.status === 409 && parseData.code === "first_statement_mismatch") {
+      setMismatch({
+        statementId,
+        extracted: parseData.extracted,
+        account: parseData.account,
+      });
+      setStep("confirm");
+      return;
+    }
+
+    if (!parseRes.ok) throw new Error(parseData.error);
+
+    setStep("done");
+    setMismatch(null);
+    setMessage(
+      `Listo: ${parseData.transactionsInserted} movimientos y ${parseData.msiPlans} planes MSI guardados.`,
+    );
+    setWarnings(parseData.warnings ?? []);
+    setFile(null);
+    // Refresca los paneles server-rendered de la página (pendientes del
+    // mes, historial) para que reflejen el statement recién parseado.
+    router.refresh();
+  }
+
+  // «Sí, es la misma tarjeta»: se actualiza con lo que dice el banco y se
+  // reintenta el parse. Un PDF de más una sola vez por tarjeta; a cambio, el
+  // guard queda con datos reales para todos los siguientes.
+  async function confirmAndRetry() {
+    if (!mismatch) return;
+    setMessage(null);
+    try {
+      const current = accounts.find((a) => a.id === mismatch.account.id);
+      // El nombre lo respeta el usuario, salvo que sea el provisional (igual
+      // al banco que tecleó): entonces entra el del PDF.
+      const nameIsPlaceholder =
+        !current ||
+        current.product_name.trim().toLowerCase() ===
+          current.issuer.trim().toLowerCase();
+
+      const patch = await fetch("/api/accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: mismatch.account.id,
+          ...(mismatch.extracted.issuer && { issuer: mismatch.extracted.issuer }),
+          ...(mismatch.extracted.last4 && { last4: mismatch.extracted.last4 }),
+          ...(nameIsPlaceholder &&
+            mismatch.extracted.productName && {
+              productName: mismatch.extracted.productName,
+            }),
+        }),
+      });
+      if (!patch.ok) {
+        const d = await patch.json().catch(() => ({}));
+        throw new Error(d.error ?? "No se pudo actualizar la tarjeta.");
+      }
+      await loadAccounts();
+      await runParse(mismatch.statementId);
+    } catch (err) {
+      setStep("error");
+      setMismatch(null);
+      setMessage(err instanceof Error ? err.message : "Error desconocido");
+    }
+  }
+
+  // «No, es otra tarjeta»: se vuelve al formulario con el archivo puesto,
+  // para que solo cambie la tarjeta y vuelva a intentar.
+  function rejectMismatch() {
+    setMismatch(null);
+    setStep("idle");
+    setMessage(null);
   }
 
   if (!loadingAccounts && loadError) {
@@ -285,6 +363,38 @@ export function StatementUpload() {
             ? "Leyendo el PDF con IA…"
             : "Subir y procesar"}
       </Button>
+
+      {step === "confirm" && mismatch && (
+        <div
+          role="alertdialog"
+          aria-labelledby="mismatch-title"
+          className="flex flex-col gap-block rounded border border-warning/40 bg-warning/10 p-5"
+        >
+          <div>
+            <p id="mismatch-title" className="text-sm font-semibold text-text">
+              Este PDF es de{" "}
+              <span className="font-mono tabular-nums">
+                {mismatch.extracted.issuer ?? "otro banco"}
+                {mismatch.extracted.last4 && ` ···· ${mismatch.extracted.last4}`}
+              </span>
+              . La tarjeta que elegiste se llama «{mismatch.account.issuer}».
+            </p>
+            <p className="mt-tight max-w-[62ch] text-sm leading-relaxed text-text-muted">
+              ¿Es la misma tarjeta? Si dices que sí, la renombramos con los
+              datos que trae el banco y seguimos. Como es su primer estado de
+              cuenta, no hay historial que se pueda mezclar.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="md" onClick={confirmAndRetry}>
+              Sí, es la misma — actualizarla
+            </Button>
+            <Button size="md" variant="ghost" onClick={rejectMismatch}>
+              No, elegir otra tarjeta
+            </Button>
+          </div>
+        </div>
+      )}
 
       {message && (
         <p

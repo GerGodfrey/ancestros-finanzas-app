@@ -2,6 +2,75 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
+import { ISSUERS, OTHER_ISSUER, isKnownIssuer } from "@/lib/issuers";
+
+/**
+ * Selector de banco con salida a texto libre. «Emisor» es jerga que la gente
+ * no reconoce —un cliente escribió «nana» ahí—, pero su banco en una lista sí
+ * lo encuentra. Si no está, elige «Otro» y lo escribe.
+ *
+ * `value` es siempre el texto final que se guarda; el componente decide solo
+ * si mostrarlo como opción de la lista o como texto libre.
+ */
+function IssuerField({
+  value,
+  onChange,
+  idPrefix,
+}: {
+  value: string;
+  onChange: (issuer: string) => void;
+  idPrefix: string;
+}) {
+  const known = isKnownIssuer(value);
+  const [mode, setMode] = useState<"list" | "other">(
+    value && !known ? "other" : "list",
+  );
+  const selectValue = mode === "other" ? OTHER_ISSUER : known ? value : "";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={`${idPrefix}-banco`} className="text-xs font-medium text-text-muted">
+        Banco
+      </label>
+      <select
+        id={`${idPrefix}-banco`}
+        value={selectValue}
+        required
+        onChange={(e) => {
+          if (e.target.value === OTHER_ISSUER) {
+            setMode("other");
+            onChange("");
+          } else {
+            setMode("list");
+            onChange(e.target.value);
+          }
+        }}
+        className="rounded border border-border-strong bg-surface px-3 py-2 text-sm text-text"
+      >
+        <option value="" disabled>
+          Elige tu banco…
+        </option>
+        {ISSUERS.map((i) => (
+          <option key={i} value={i}>
+            {i}
+          </option>
+        ))}
+        <option value={OTHER_ISSUER}>Otro (escribirlo)</option>
+      </select>
+      {mode === "other" && (
+        <input
+          aria-label="Nombre del banco"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Como aparece en tu estado de cuenta"
+          required
+          autoFocus
+          className="rounded border border-border-strong bg-surface px-3 py-2 text-sm text-text"
+        />
+      )}
+    </div>
+  );
+}
 
 type AccountRow = {
   id: string;
@@ -125,8 +194,10 @@ export function AccountSettings() {
       // en la cuenta en cada subida. Pedirlos a mano aquí solo abría la puerta
       // a un typo que después rechaza el primer PDF culpando al archivo.
       body: JSON.stringify({
-        issuer: newIssuer,
-        productName: newProductName,
+        issuer: newIssuer.trim(),
+        // Sin nombre, se guarda el banco como nombre provisional. El primer
+        // PDF trae el nombre real y la confirmación de subida lo reemplaza.
+        productName: newProductName.trim() || newIssuer.trim(),
       }),
     });
     const data = await res.json();
@@ -170,19 +241,14 @@ export function AccountSettings() {
                 {editingId === a.id ? (
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <IssuerField
+                        idPrefix={`edit-${a.id}`}
+                        value={editIssuer}
+                        onChange={setEditIssuer}
+                      />
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-text-muted">
-                          Emisor
-                        </label>
-                        <input
-                          value={editIssuer}
-                          onChange={(e) => setEditIssuer(e.target.value)}
-                          className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs font-medium text-text-muted">
-                          Nombre del producto
+                          Nombre de la tarjeta
                         </label>
                         <input
                           value={editProductName}
@@ -258,7 +324,9 @@ export function AccountSettings() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-medium text-text">
-                        {a.issuer} · {a.product_name}
+                        {a.product_name.toLowerCase() === a.issuer.toLowerCase()
+                          ? a.issuer
+                          : `${a.issuer} · ${a.product_name}`}
                       </span>
                       {a.last4 && (
                         <span className="font-mono text-xs text-text-faint">
@@ -321,28 +389,18 @@ export function AccountSettings() {
           className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-5"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <IssuerField idPrefix="new" value={newIssuer} onChange={setNewIssuer} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                Emisor
+              <label htmlFor="new-nombre" className="text-xs font-medium text-text-muted">
+                Nombre de la tarjeta{" "}
+                <span className="font-normal text-text-faint">(opcional)</span>
               </label>
               <input
-                value={newIssuer}
-                onChange={(e) => setNewIssuer(e.target.value)}
-                placeholder="Banamex, Amex…"
-                required
-                className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-muted">
-                Nombre del producto
-              </label>
-              <input
+                id="new-nombre"
                 value={newProductName}
                 onChange={(e) => setNewProductName(e.target.value)}
-                placeholder="Explora, Platinum…"
-                required
-                className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text"
+                placeholder="Platinum, Oro, Clásica…"
+                className="rounded border border-border-strong bg-surface px-3 py-2 text-sm text-text"
               />
             </div>
           </div>
@@ -350,8 +408,9 @@ export function AccountSettings() {
           <p className="flex items-start gap-2 text-xs text-text-faint">
             <span aria-hidden="true" className="leading-[1.45]">ⓘ</span>
             <span>
-              Los últimos 4 dígitos, el límite de crédito y las tasas se leen
-              del PDF la primera vez que subas un estado de cuenta.
+              Los últimos 4 dígitos, el límite, las tasas y —si lo dejas vacío—
+              el nombre de la tarjeta se leen del PDF la primera vez que subas
+              un estado de cuenta.
             </span>
           </p>
 
