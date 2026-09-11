@@ -157,6 +157,11 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_SANDBOX }}
+      # /api/version los devuelve: es lo que permite saber qué commit corre
+      # aquí sin abrir Actions. NEXT_PUBLIC_ para que Next los inyecte en el
+      # build (los dos ambientes usan --prod, VERCEL_ENV no los distingue).
+      NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
+      NEXT_PUBLIC_DEPLOY_ENV: sandbox
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -249,6 +254,8 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
+      NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
+      NEXT_PUBLIC_DEPLOY_ENV: prod
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

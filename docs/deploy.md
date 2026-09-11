@@ -59,12 +59,10 @@ consecuencias prácticas:
 
 ## Saber qué commit corre en cada ambiente
 
-Hoy solo se puede inferir: sandbox es el último push a `main` cuya pierna quedó
-verde, y prod es el último gate aprobado. Ambos se leen en Actions. Localhost
-se compara con `git status -sb` (`behind N` = falta `git pull`).
-
-Verificarlo de frente —sin Actions ni inferencias— es el pendiente de
-`/api/version` en `pendientes.md`.
+`curl <host>/api/version` devuelve `{ sha, short, env }` del despliegue. Para
+comprobar que todo está alineado, comparar contra `git rev-parse --short
+origin/main`; localhost se compara con `git status -sb` (`behind N` = falta
+`git pull`). Detalle en `environments.md` → «Saber qué corre dónde».
 
 > **Nunca** subas un dump de **datos** de producción como artifact de Actions.
 > En repos públicos los artifacts los descarga cualquiera; eso publicaría todos
