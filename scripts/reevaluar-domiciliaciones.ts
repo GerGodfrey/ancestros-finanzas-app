@@ -49,6 +49,17 @@ async function main() {
     .select("id, user_id, account_id, description, merchant_key, status");
 
   if (error) {
+    // El caso más probable la primera vez: correrlo contra una base donde la
+    // migración todavía no se aplicó. El error de Postgres por sí solo no dice
+    // qué hacer, y es justo lo que pasó la primera vez que se usó.
+    if (error.message.includes("merchant_key")) {
+      console.error(
+        "Esta base todavía no tiene la migración 0011.\n" +
+          "El script se corre DESPUÉS del deploy: mergea el PR, espera a que\n" +
+          "el job migrate-* termine en verde, y vuelve a intentar.",
+      );
+      process.exit(1);
+    }
     console.error("No se pudieron leer las domiciliaciones:", error.message);
     process.exit(1);
   }
