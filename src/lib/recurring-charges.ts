@@ -27,19 +27,30 @@ const HISTORY_LIMIT = 3;
 /** `fee` fuera: son comisiones del banco, no servicios contratados. */
 const RECURRING_TYPES = ["regular"];
 
-interface Group {
+export interface Group {
   merchantKey: string;
   description: string;
   occurrences: Occurrence[];
 }
 
-export async function detectRecurringCharges(opts: {
+/**
+ * Lee los últimos cortes de una cuenta y agrupa sus movimientos por comercio.
+ *
+ * Se exporta para que el script de reevaluación pueda mirar lo mismo que ve el
+ * detector sin repetir la consulta — y sobre todo sin repetir el criterio, que
+ * es donde se desincronizan dos copias de la misma lógica.
+ */
+export async function loadAccountGroups(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any>;
   userId: string;
   accountId: string;
-  statementId: string; // el statement recién parseado
-}): Promise<void> {
+}): Promise<{
+  groups: Map<string, Group>;
+  monthByStatement: Map<string, string>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  txs: any[];
+}> {
   const { data: recentStatements } = await opts.supabase
     .from("statements")
     .select("id, period_end")
@@ -50,12 +61,15 @@ export async function detectRecurringCharges(opts: {
     .order("period_end", { ascending: false })
     .limit(HISTORY_LIMIT);
 
-  const statements = recentStatements ?? [];
-  if (statements.length === 0) return;
-
   const monthByStatement = new Map(
-    statements.map((s) => [s.id as string, (s.period_end as string).slice(0, 7)]),
+    (recentStatements ?? []).map((s) => [
+      s.id as string,
+      (s.period_end as string).slice(0, 7),
+    ]),
   );
+
+  const groups = new Map<string, Group>();
+  if (monthByStatement.size === 0) return { groups, monthByStatement, txs: [] };
 
   const { data: txs } = await opts.supabase
     .from("transactions")
@@ -65,7 +79,6 @@ export async function detectRecurringCharges(opts: {
     .in("statement_id", [...monthByStatement.keys()])
     .in("type", RECURRING_TYPES);
 
-  const groups = new Map<string, Group>();
   for (const t of txs ?? []) {
     const description = t.description as string;
     const merchantKey = canonicalMerchantKey(description);
@@ -84,6 +97,19 @@ export async function detectRecurringCharges(opts: {
     });
     groups.set(merchantKey, group);
   }
+
+  return { groups, monthByStatement, txs: txs ?? [] };
+}
+
+export async function detectRecurringCharges(opts: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any>;
+  userId: string;
+  accountId: string;
+  statementId: string; // el statement recién parseado
+}): Promise<void> {
+  const { groups, monthByStatement, txs } = await loadAccountGroups(opts);
+  if (monthByStatement.size === 0) return;
 
   // Lo que el usuario ya respondió manda sobre cualquier score. Un 'dismissed'
   // es "no me vuelvas a sugerir esto" y se respeta para siempre; un 'confirmed'

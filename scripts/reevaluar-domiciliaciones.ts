@@ -6,10 +6,15 @@
  * domiciliaciones de un usuario desaparecen del panel hasta que suba un PDF
  * nuevo. No es cosmético.
  *
- * Qué hace con cada fila:
- *   - le calcula la clave canónica a partir de su descripción;
- *   - la vuelve a clasificar contra las transacciones ya guardadas;
- *   - la que pasa queda 'suggested'; la que no, 'dismissed'.
+ * Dos pasos:
+ *
+ *   1. **Reevaluar** lo que ya existe: calcularle la clave canónica y volver a
+ *      clasificarlo con la regla nueva. Lo que pasa queda 'suggested'; lo que
+ *      no, 'dismissed'.
+ *   2. **Descubrir** lo que la regla vieja nunca vio. Los falsos negativos no
+ *      tienen fila que reevaluar, así que hay que buscarlos en las
+ *      transacciones ya guardadas. Sin este paso, una suscripción que la regla
+ *      vieja se perdía no aparecería hasta el siguiente estado de cuenta.
  *
  * **No borra nada.** Una fila descartada sigue ahí y el usuario puede
  * reactivarla desde el dashboard — que es la diferencia entre corregir una
@@ -26,6 +31,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { canonicalMerchantKey } from "../src/lib/merchant-key";
+import { loadAccountGroups } from "../src/lib/recurring-charges";
 import { classifyRecurring, type Occurrence } from "../src/lib/recurring-rules";
 
 const url = process.env.SUPABASE_URL;
@@ -72,14 +78,22 @@ async function main() {
   let descartadas = 0;
 
   for (const row of rows) {
-    // Lo que el usuario ya respondió no se toca: sería deshacerle una decisión
-    // a sus espaldas, que es justo lo que este cambio viene a arreglar.
+    const merchantKey = canonicalMerchantKey(row.description as string);
+
+    // Lo que el usuario ya respondió no se reclasifica: sería deshacerle una
+    // decisión a sus espaldas. Pero la clave de comercio sí se rellena — sin
+    // ella la fila no empareja con nada en el dashboard, y el paso 2 la
+    // insertaría otra vez creyendo que es un comercio nuevo.
     if (row.status === "confirmed" || row.status === "dismissed") {
       confirmadasIntactas++;
+      if (!row.merchant_key && !dryRun) {
+        await supabase
+          .from("recurring_charges")
+          .update({ merchant_key: merchantKey })
+          .eq("id", row.id);
+      }
       continue;
     }
-
-    const merchantKey = canonicalMerchantKey(row.description as string);
 
     // Últimos 3 cortes de esa tarjeta, igual que el detector en vivo.
     const { data: statements } = await supabase
@@ -148,7 +162,87 @@ async function main() {
   }
 
   console.log(
-    `\nListo. ${quedanSugeridas} siguen sugeridas, ${descartadas} descartadas, ${confirmadasIntactas} intactas por tener respuesta del usuario.`,
+    `\nPaso 1 — filas existentes: ${quedanSugeridas} siguen sugeridas, ${descartadas} descartadas, ${confirmadasIntactas} intactas por tener respuesta del usuario.`,
+  );
+
+  // --- Paso 2 · descubrimiento -------------------------------------------
+  // Reevaluar no basta. Los falsos negativos que motivaron todo esto —una
+  // suscripción que la regla vieja nunca vio porque la IA escribía el nombre
+  // distinto cada mes— no tienen fila que reevaluar. Hay que buscarlos en las
+  // transacciones ya guardadas, que es lo que haría el detector si el estado
+  // de cuenta acabara de llegar.
+  //
+  // Va después del paso 1 a propósito: hasta que todas las filas viejas tengan
+  // su clave, este paso no puede saber cuáles ya existen y las duplicaría.
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, user_id");
+
+  let descubiertas = 0;
+
+  for (const account of accounts ?? []) {
+    const { groups } = await loadAccountGroups({
+      supabase,
+      userId: account.user_id as string,
+      accountId: account.id as string,
+    });
+
+    const { data: yaExisten } = await supabase
+      .from("recurring_charges")
+      .select("merchant_key")
+      .eq("user_id", account.user_id)
+      .eq("account_id", account.id);
+
+    const conocidas = new Set(
+      (yaExisten ?? []).map((r) => r.merchant_key).filter(Boolean),
+    );
+
+    for (const group of groups.values()) {
+      if (conocidas.has(group.merchantKey)) continue;
+
+      const verdict = classifyRecurring({
+        description: group.description,
+        occurrences: group.occurrences,
+      });
+      if (!verdict.isRecurring) continue;
+
+      descubiertas++;
+      const months = group.occurrences.map((o) => o.month);
+      const typicalAmount =
+        group.occurrences.reduce((sum, o) => sum + o.amount, 0) /
+        group.occurrences.length;
+
+      console.log(
+        `NUEVA     ${group.description.slice(0, 40).padEnd(40)} → ${group.merchantKey} · ${verdict.reason}`,
+      );
+
+      if (!dryRun) {
+        await supabase.from("recurring_charges").insert({
+          user_id: account.user_id,
+          account_id: account.id,
+          description: group.description,
+          merchant_key: group.merchantKey,
+          typical_amount: typicalAmount,
+          frequency: "monthly",
+          first_seen: `${months.reduce((a, b) => (a < b ? a : b))}-01`,
+          last_seen: `${months.reduce((a, b) => (a > b ? a : b))}-01`,
+          // Sugerida, nunca confirmada: nadie se la ha preguntado al usuario.
+          status: "suggested",
+          confidence: verdict.confidence,
+          day_of_month: verdict.dayOfMonth,
+          amount_cv: verdict.amountCv,
+          active: true,
+        });
+      }
+    }
+  }
+
+  console.log(
+    `Paso 2 — descubrimiento: ${descubiertas} domiciliaciones nuevas que la regla vieja no veía.`,
+  );
+
+  console.log(
+    `\nListo. Al terminar tendrás ${quedanSugeridas + descubiertas} sugerencias por responder en el dashboard.`,
   );
   if (dryRun) console.log("Dry-run: no se escribió nada.");
 }
