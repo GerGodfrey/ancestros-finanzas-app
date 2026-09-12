@@ -110,6 +110,33 @@ en tres pasos, nunca en uno: migración aditiva → deploy del código que deja 
 usar la columna vieja → migración posterior que la borra. Si borras y deployas
 a la vez, la app vieja pega contra un esquema que ya no existe.
 
+## Scripts de una sola corrida
+
+Algunas migraciones necesitan que alguien recorra los datos existentes después
+del deploy. No van en el pipeline: se corren a mano, en orden, y contra
+producción siempre primero en seco.
+
+### `scripts/reevaluar-domiciliaciones.ts` (migración 0011)
+
+Las `recurring_charges` anteriores a 0011 no tienen `merchant_key`, y el
+dashboard empareja por esa clave. **Sin correr esto, las domiciliaciones de un
+usuario desaparecen del panel** hasta que suba un estado de cuenta nuevo. No es
+opcional ni cosmético.
+
+```bash
+# Primero en seco: imprime qué haría y no escribe nada.
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+  npx tsx scripts/reevaluar-domiciliaciones.ts --dry-run
+
+# Si la salida cuadra, sin la bandera.
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+  npx tsx scripts/reevaluar-domiciliaciones.ts
+```
+
+Usa la service role key porque tiene que ver las filas de todos los usuarios;
+por eso vive fuera de la app y se corre a mano. Es idempotente, no borra nada, y
+no toca las filas que el usuario ya respondió.
+
 ## Rollback
 
 **El código:** en el dashboard de Vercel del proyecto afectado, busca el

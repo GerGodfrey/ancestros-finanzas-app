@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
+import { canonicalMerchantKey } from "@/lib/merchant-key";
 import { createClient } from "@/lib/supabase/server";
 import { isTransactionCategory } from "@/lib/transaction-categories";
 
 // Edición manual de un movimiento (curar descripción y/o categoría) — el
 // usuario puede corregir lo que la IA dejó mal. Bloqueado para MSI (la
 // mensualidad ya está descrita por msi_plans.concept) y para movimientos
-// que coinciden con una domiciliación activa detectada (editar la
-// descripción rompería el matching de texto exacto de
-// detectRecurringCharges) — mismo criterio que RelevantTransaction.isEditable
-// en get-monthly-data.ts, revalidado aquí server-side.
+// que ya son una domiciliación conocida — mismo criterio que
+// RelevantTransaction.isEditable en get-monthly-data.ts, revalidado aquí
+// server-side.
+//
+// El motivo cambió con 0011: el emparejamiento ya no es por texto exacto sino
+// por `merchant_key`, así que una edición menor ya no rompe la cadena. Se sigue
+// bloqueando por otra razón — la descripción es lo que el usuario reconoce como
+// "su Netflix", y renombrarla desde aquí deja la regla apuntando a un nombre
+// que ya no existe en ningún estado de cuenta.
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -40,13 +46,17 @@ export async function PATCH(
     );
   }
 
+  // Por `merchant_key` y por `status`, igual que el dashboard. Antes era
+  // `ilike` sobre la descripción y `active = true`: el `ilike` fallaba en
+  // cuanto la IA escribía el nombre distinto, y `active` dejó de ser la fuente
+  // de verdad en 0011.
   const { data: recurringMatch } = await supabase
     .from("recurring_charges")
     .select("id")
     .eq("user_id", user.id)
     .eq("account_id", tx.account_id)
-    .eq("active", true)
-    .ilike("description", tx.description)
+    .in("status", ["suggested", "confirmed"])
+    .eq("merchant_key", canonicalMerchantKey(tx.description as string))
     .maybeSingle();
 
   if (recurringMatch) {

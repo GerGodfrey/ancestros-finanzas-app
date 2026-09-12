@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { shouldWarnAboutMissingIncome } from "@/lib/dashboard/income-warning";
+import { monthLongLabel } from "@/lib/month";
 import type {
   MonthlyDashboardData,
   RelevantTransaction,
@@ -767,6 +768,73 @@ function DesgloseTab({ data }: { data: MonthlyDashboardData }) {
   );
 }
 
+/**
+ * La respuesta del usuario a una domiciliación. Dos botones y nada más.
+ *
+ * Muestra el error si la llamada falla en vez de tragárselo: una respuesta que
+ * no se guardó y no avisa es peor que no preguntar, porque el usuario cree que
+ * ya quedó y la sugerencia reaparece el mes que viene.
+ */
+function RecurringAnswer({
+  id,
+  yes,
+  no,
+}: {
+  id: string;
+  yes?: { label: string; status: "confirmed" | "dismissed" };
+  no?: { label: string; status: "confirmed" | "dismissed" };
+}) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function answer(status: "confirmed" | "dismissed") {
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/recurring-charges", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status }),
+    }).catch(() => null);
+    setSaving(false);
+
+    if (!res || !res.ok) {
+      const data = await res?.json().catch(() => ({}));
+      setError(data?.error ?? "No se pudo guardar tu respuesta.");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        {yes && (
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={saving}
+            onClick={() => answer(yes.status)}
+          >
+            {yes.label}
+          </Button>
+        )}
+        {no && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => answer(no.status)}
+            className="text-xs text-text-faint underline underline-offset-4 hover:text-text-muted disabled:opacity-50"
+          >
+            {no.label}
+          </button>
+        )}
+      </div>
+      {error && <span className="text-2xs text-negative">{error}</span>}
+    </div>
+  );
+}
+
 function CategoryBadge({ category }: { category: TransactionCategory | null }) {
   if (!category) return <span className="text-xs text-text-faint">—</span>;
   return (
@@ -869,7 +937,7 @@ function EditableTransactionRow({ t }: { t: RelevantTransaction }) {
       </td>
       <td className="py-2 pr-4 font-medium text-text">{money(t.amount)}</td>
       <td className="py-2 pr-4">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CategoryBadge category={t.category} />
           {t.isEditable && (
             <button
@@ -880,9 +948,63 @@ function EditableTransactionRow({ t }: { t: RelevantTransaction }) {
               ✎
             </button>
           )}
+          <RecurringToggle t={t} />
         </div>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Marcar o desmarcar un movimiento como pago domiciliado, desde el propio
+ * movimiento. Es la vía directa: no hay que esperar a que el detector lo
+ * proponga, y lo que se marca aquí queda como regla para los meses siguientes.
+ */
+function RecurringToggle({ t }: { t: RelevantTransaction }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (t.type === "msi") return null;
+
+  async function mark() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/recurring-charges", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transactionId: t.id }),
+    }).catch(() => null);
+    setSaving(false);
+
+    if (!res || !res.ok) {
+      const data = await res?.json().catch(() => ({}));
+      setError(data?.error ?? "No se pudo marcar.");
+      return;
+    }
+    router.refresh();
+  }
+
+  if (t.isRecurring) {
+    return (
+      <span className="rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-2xs text-accent">
+        Pago domiciliado
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={mark}
+        className="text-2xs text-text-faint underline underline-offset-4 hover:text-accent disabled:opacity-50"
+      >
+        Marcar domiciliado
+      </button>
+      {error && <span className="text-2xs text-negative">{error}</span>}
+    </>
   );
 }
 
@@ -1061,11 +1183,44 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
         )}
       </Panel>
 
-      <Panel title="Domiciliaciones Activas">
+      {/*
+        Las ausencias van primero: es lo único aquí que puede costarte dinero
+        —un servicio que creías cancelado y sigue cobrando— y antes no se
+        mostraba en absoluto. La fila se ponía `active = false` y desaparecía
+        sin decir nada.
+      */}
+      {data.missingRecurringCharges.length > 0 && (
+        <Panel title="Domiciliaciones que dejaron de aparecer">
+          <ul className="flex flex-col gap-3">
+            {data.missingRecurringCharges.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm text-text">{r.description}</div>
+                  <div className="text-2xs text-text-faint">
+                    {r.accountLabel} · no aparece desde{" "}
+                    {monthLongLabel(r.missingSince)} · solía cobrar{" "}
+                    {money(r.typicalAmount)}
+                  </div>
+                </div>
+                <RecurringAnswer
+                  id={r.id}
+                  yes={{ label: "Sí, quitar", status: "dismissed" }}
+                  no={{ label: "Sigue activa", status: "confirmed" }}
+                />
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
+      <Panel title="Domiciliaciones Confirmadas">
         {data.recurringCharges.length === 0 ? (
-          <p className="text-sm text-text-faint">
-            Todavía no se detectan domiciliaciones — hacen falta al menos 2
-            statements de una misma tarjeta con el mismo cargo repetido.
+          <p className="text-sm leading-relaxed text-text-faint">
+            Todavía no confirmas ninguna. Abajo aparecen las que detectamos —
+            solo las que confirmes cuentan en la proyección del próximo mes.
           </p>
         ) : (
           <>
@@ -1076,6 +1231,7 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
                   <th className="pb-2 pr-4">Tarjeta</th>
                   <th className="pb-2 pr-4">Monto Típico</th>
                   <th className="pb-2 pr-4">Última vez</th>
+                  <th className="pb-2" />
                 </tr>
               </thead>
               <tbody>
@@ -1087,6 +1243,12 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
                       {money(r.typicalAmount)}
                     </td>
                     <td className="py-2 pr-4 text-text-muted">{r.lastSeen ?? "—"}</td>
+                    <td className="py-2 text-right">
+                      <RecurringAnswer
+                        id={r.id}
+                        no={{ label: "No es domiciliación", status: "dismissed" }}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1107,6 +1269,41 @@ function ProximoMesTab({ data }: { data: MonthlyDashboardData }) {
         )}
       </Panel>
 
+      {/*
+        Sugerencias aparte, y sin sumar en ningún total. Antes todo lo detectado
+        contaba de una vez: por eso entraban Oxxo y las comisiones del banco, y
+        por eso la proyección del próximo mes salía inflada.
+      */}
+      {data.recurringSuggestions.length > 0 && (
+        <Panel title="¿Alguna de estas es domiciliación?">
+          <ul className="flex flex-col gap-3">
+            {data.recurringSuggestions.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm text-text">
+                    {r.description}{" "}
+                    <span className="text-text-muted">
+                      {money(r.typicalAmount)}
+                    </span>
+                  </div>
+                  <div className="text-2xs text-text-faint">
+                    {r.accountLabel}
+                    {r.detail ? ` · ${r.detail}` : ""}
+                  </div>
+                </div>
+                <RecurringAnswer
+                  id={r.id}
+                  yes={{ label: "Sí", status: "confirmed" }}
+                  no={{ label: "No", status: "dismissed" }}
+                />
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
     </div>
   );
 }

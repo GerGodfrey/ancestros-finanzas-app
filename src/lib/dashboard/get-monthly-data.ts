@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { MonthlyInsight, Recommendation } from "@/lib/ai/monthly-insights";
+import { canonicalMerchantKey } from "@/lib/merchant-key";
 import { resolveDashboardMonths } from "./resolve-months";
 import {
   isTransactionCategory,
@@ -31,10 +32,12 @@ export interface RelevantTransaction {
   date: string;
   category: TransactionCategory | null;
   // false para MSI (la mensualidad ya está descrita por msi_plans.concept)
-  // y para movimientos que coinciden con una domiciliación activa
-  // detectada (editar la descripción rompería el matching de texto exacto
-  // que usa detectRecurringCharges) — el usuario puede curar todo lo demás.
+  // y para movimientos que ya son una domiciliación conocida — el usuario
+  // puede curar todo lo demás.
   isEditable: boolean;
+  // Si este comercio ya está registrado como domiciliación (en cualquier
+  // estado salvo 'dismissed'). Distinto de `!isEditable`, que además cubre MSI.
+  isRecurring: boolean;
 }
 
 export interface MsiPlanSummary {
@@ -76,6 +79,20 @@ export interface RecurringChargeSummary {
   accountLabel: string;
   typicalAmount: number;
   lastSeen: string | null;
+  /** 0..1 — por qué se sugirió. Null en las filas anteriores a 0011. */
+  confidence: number | null;
+  /** En palabras: día típico y estabilidad del monto. */
+  detail: string | null;
+}
+
+/** Una domiciliación confirmada que dejó de aparecer. Se pregunta, no se borra. */
+export interface MissingRecurringCharge {
+  id: string;
+  description: string;
+  accountLabel: string;
+  typicalAmount: number;
+  /** 'YYYY-MM-01' del primer mes en que faltó. */
+  missingSince: string;
 }
 
 export interface StatusBadge {
@@ -102,7 +119,12 @@ export interface MonthlyDashboardData {
   incomes: { id: string; concept: string; amount: number; isRecurring: boolean }[];
   fixedCosts: { id: string; concept: string; amount: number; isRecurring: boolean }[];
   msiPlans: MsiPlanSummary[];
+  /** Confirmadas por el usuario. Son las únicas que suman en la proyección. */
   recurringCharges: RecurringChargeSummary[];
+  /** Detectadas pero sin responder. Se muestran aparte, con Sí/No. */
+  recurringSuggestions: RecurringChargeSummary[];
+  /** Confirmadas que no aparecieron: "¿la cancelaste?". */
+  missingRecurringCharges: MissingRecurringCharge[];
   relevantTransactionsByAccount: {
     accountId: string;
     accountLabel: string;
@@ -143,6 +165,8 @@ const EMPTY_DATA: MonthlyDashboardData = {
   fixedCosts: [],
   msiPlans: [],
   recurringCharges: [],
+  recurringSuggestions: [],
+  missingRecurringCharges: [],
   relevantTransactionsByAccount: [],
   categoryBreakdown: [],
   uncategorizedCount: 0,
@@ -384,16 +408,20 @@ export async function getMonthlyDashboardData(
       .select("id, concept, amount, note")
       .eq("user_id", user.id)
       .order("created_at", { ascending: true }),
-    // Solo se usa para saber qué descripciones cuentan como domiciliación
-    // detectada (patrón repetido) — el monto y la fecha que se muestran
-    // salen de las transacciones de ESTE mes (más abajo), nunca de estos
-    // campos, que se sobreescriben con cada statement nuevo sin importar el
-    // mes.
+    // Dice qué comercios son un patrón detectado y en qué estado está cada
+    // uno. El monto y la fecha que se muestran salen de las transacciones de
+    // ESTE mes (más abajo), nunca de estos campos, que se sobreescriben con
+    // cada statement nuevo sin importar el mes que se esté viendo.
+    //
+    // Se filtra por `status` y no por `active`: `active` se conservó en 0011
+    // para no romper lo que ya lo leía, pero dejó de ser la fuente de verdad.
     supabase
       .from("recurring_charges")
-      .select("id, account_id, description")
+      .select(
+        "id, account_id, description, merchant_key, status, confidence, day_of_month, amount_cv, typical_amount, missing_since",
+      )
       .eq("user_id", user.id)
-      .eq("active", true),
+      .in("status", ["suggested", "confirmed"]),
   ]);
 
   const statementIds = statementsInMonth.map((s) => s.id);
@@ -556,46 +584,87 @@ export async function getMonthlyDashboardData(
 
   const transactionsList = transactions ?? [];
 
-  // --- Domiciliaciones activas ESTE MES: recurring_charges solo dice qué
-  // descripciones son un patrón detectado (histórico, comparando varios
-  // statements) — el monto y la fecha que se muestran salen de las
-  // transacciones DE ESTE MES, nunca de las columnas de esa tabla (que se
-  // sobreescriben con cada statement nuevo sin importar el mes que se esté
-  // viendo). Si la domiciliación no cobró nada este mes, no aparece.
-  const recurringChargeByKey = new Map(
-    (recurringChargesRaw ?? []).map((r) => [
-      `${r.account_id}::${String(r.description).trim().toUpperCase()}`,
-      r,
-    ]),
+  // --- Domiciliaciones de ESTE MES ----------------------------------------
+  // `recurring_charges` dice qué comercios son un patrón y en qué estado está
+  // cada uno; el monto y la fecha salen de las transacciones de este mes, que
+  // es lo único que habla del mes que se está viendo.
+  //
+  // El emparejamiento va por `merchant_key`, no por descripción exacta. Era
+  // exacto y por eso una domiciliación desaparecía del panel en cuanto la IA
+  // escribía el nombre distinto, aunque la fila siguiera ahí.
+  const recurringByKey = new Map(
+    (recurringChargesRaw ?? [])
+      .filter((r) => r.merchant_key)
+      .map((r) => [`${r.account_id}::${r.merchant_key}`, r]),
   );
-  const recurringMatchesThisMonth = new Map<
+  const matchesThisMonth = new Map<
     string,
     { amounts: number[]; dates: string[] }
   >();
   for (const t of transactionsList) {
-    const key = `${t.account_id}::${t.description.trim().toUpperCase()}`;
-    if (!recurringChargeByKey.has(key)) continue;
-    const entry = recurringMatchesThisMonth.get(key) ?? {
-      amounts: [],
-      dates: [],
-    };
+    const key = `${t.account_id}::${canonicalMerchantKey(t.description)}`;
+    if (!recurringByKey.has(key)) continue;
+    const entry = matchesThisMonth.get(key) ?? { amounts: [], dates: [] };
     entry.amounts.push(Number(t.amount));
     entry.dates.push(t.tx_date);
-    recurringMatchesThisMonth.set(key, entry);
+    matchesThisMonth.set(key, entry);
   }
-  const recurringCharges: RecurringChargeSummary[] = Array.from(
-    recurringMatchesThisMonth.entries(),
-  ).map(([key, match]) => {
-    const r = recurringChargeByKey.get(key)!;
+
+  const toSummary = (
+    key: string,
+    match: { amounts: number[]; dates: string[] },
+  ): RecurringChargeSummary => {
+    const r = recurringByKey.get(key)!;
+    const day = r.day_of_month as number | null;
+    const cv = r.amount_cv as number | null;
     return {
-      id: r.id,
-      description: r.description,
+      id: r.id as string,
+      description: r.description as string,
       accountLabel: accountLabel(r.account_id as string),
       typicalAmount:
         match.amounts.reduce((sum, a) => sum + a, 0) / match.amounts.length,
       lastSeen: match.dates.reduce((a, b) => (a > b ? a : b)),
+      confidence: cv === null && day === null ? null : Number(r.confidence ?? 0),
+      detail:
+        day === null
+          ? null
+          : `Alrededor del día ${day}${
+              cv !== null && cv <= 0.02 ? ", por el mismo monto" : ""
+            }.`,
     };
-  });
+  };
+
+  const recurringCharges: RecurringChargeSummary[] = [];
+  const recurringSuggestions: RecurringChargeSummary[] = [];
+  for (const [key, match] of matchesThisMonth) {
+    const row = recurringByKey.get(key)!;
+    (row.status === "confirmed" ? recurringCharges : recurringSuggestions).push(
+      toSummary(key, match),
+    );
+  }
+  // Las sugerencias más seguras primero: son las que el usuario va a poder
+  // responder de un vistazo, sin ir a buscar el cargo al estado de cuenta.
+  recurringSuggestions.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+
+  // Ausentes: confirmadas que dejaron de aparecer. No se apagan en silencio —
+  // se preguntan. Solo se listan si la ausencia empezó en el mes que se está
+  // viendo o antes, para no anunciar en julio algo que faltó en septiembre.
+  const missingRecurringCharges: MissingRecurringCharge[] = (
+    recurringChargesRaw ?? []
+  )
+    .filter(
+      (r) =>
+        r.status === "confirmed" &&
+        r.missing_since &&
+        (r.missing_since as string) <= month,
+    )
+    .map((r) => ({
+      id: r.id as string,
+      description: r.description as string,
+      accountLabel: accountLabel(r.account_id as string),
+      typicalAmount: Number(r.typical_amount ?? 0),
+      missingSince: r.missing_since as string,
+    }));
 
   // --- Proyección a próximo mes: solo lo que sí va a repetirse ---
   // ingresoTotal/egresoDebito de arriba son el balance REAL de este mes
@@ -609,6 +678,9 @@ export async function getMonthlyDashboardData(
   const egresoDebitoRecurrente = (fixedCosts ?? [])
     .filter((f) => f.is_recurring)
     .reduce((sum, f) => sum + Number(f.amount), 0);
+  // Solo las confirmadas suman. Antes contaba todo lo detectado, incluidos
+  // Oxxo, Soriana y las comisiones del banco: por eso la proyección del
+  // próximo mes salía inflada.
   const domiciliacionesTotal = recurringCharges.reduce(
     (sum, r) => sum + r.typicalAmount,
     0,
@@ -618,12 +690,11 @@ export async function getMonthlyDashboardData(
     (egresoDebitoRecurrente + msiMensualTotal + domiciliacionesTotal);
 
   // --- Movimientos relevantes: top 6 por tarjeta ---
-  // Claves "accountId::DESCRIPCIÓN" de domiciliaciones detectadas (el set
-  // global, no solo las de este mes) — se usan para bloquear la edición
-  // manual de descripción en esos movimientos (ver
-  // RelevantTransaction.isEditable), sin importar si cobraron justo este
-  // mes o no.
-  const recurringDescriptionKeys = new Set(recurringChargeByKey.keys());
+  // Claves "accountId::clave-de-comercio" de domiciliaciones detectadas (el
+  // set global, no solo las de este mes) — bloquean la edición manual de la
+  // descripción en esos movimientos (ver RelevantTransaction.isEditable),
+  // cobraran o no justo este mes.
+  const recurringDescriptionKeys = new Set(recurringByKey.keys());
 
   const toRelevant = (t: (typeof transactionsList)[number]): RelevantTransaction => ({
     id: t.id,
@@ -634,8 +705,11 @@ export async function getMonthlyDashboardData(
     isEditable:
       t.type !== "msi" &&
       !recurringDescriptionKeys.has(
-        `${t.account_id}::${t.description.trim().toUpperCase()}`,
+        `${t.account_id}::${canonicalMerchantKey(t.description)}`,
       ),
+    isRecurring: recurringDescriptionKeys.has(
+      `${t.account_id}::${canonicalMerchantKey(t.description)}`,
+    ),
     date: t.tx_date,
     category: isTransactionCategory(t.category) ? t.category : null,
   });
@@ -763,6 +837,10 @@ export async function getMonthlyDashboardData(
     })),
     msiPlans,
     recurringCharges: hasStatementsThisMonth ? recurringCharges : [],
+    recurringSuggestions: hasStatementsThisMonth ? recurringSuggestions : [],
+    missingRecurringCharges: hasStatementsThisMonth
+      ? missingRecurringCharges
+      : [],
     relevantTransactionsByAccount,
     categoryBreakdown,
     uncategorizedCount,
