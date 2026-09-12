@@ -196,6 +196,23 @@ export function BudgetQuickAdd({ months }: {
             )}
           </div>
         )}
+
+        {/*
+          El riesgo real de esta pantalla no es que el usuario no entienda cómo
+          se llama cada cosa: es que capture aquí un cargo que su tarjeta de
+          crédito ya trae. Ese dinero acabaría contado dos veces en la
+          proyección del próximo mes —una como costo fijo y otra como
+          domiciliación detectada— y el error sería de cuentas, no de nombres.
+
+          Va solo en Egreso: un ingreso no se cobra a una tarjeta, y ahí la
+          advertencia sobraría.
+        */}
+        {kind === "fixed" && (
+          <p className="max-w-[62ch] text-2xs leading-relaxed text-text-faint">
+            Si se cobra a una tarjeta de crédito, no lo captures aquí — ya lo
+            detectamos en Domiciliaciones y se contaría doble.
+          </p>
+        )}
       </form>
     </div>
   );
