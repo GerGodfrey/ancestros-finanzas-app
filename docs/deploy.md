@@ -123,6 +123,12 @@ dashboard empareja por esa clave. **Sin correr esto, las domiciliaciones de un
 usuario desaparecen del panel** hasta que suba un estado de cuenta nuevo. No es
 opcional ni cosmético.
 
+Hace dos pasos: reevalúa lo que ya existe, y **descubre** lo que la regla vieja
+nunca vio. El segundo importa tanto como el primero — los falsos negativos (una
+suscripción que no se detectaba porque la IA escribía el nombre distinto cada
+mes) no tienen fila que reevaluar, y sin descubrirlos habría que esperar al
+siguiente estado de cuenta para verlos.
+
 ```bash
 # Primero en seco: imprime qué haría y no escribe nada.
 SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
